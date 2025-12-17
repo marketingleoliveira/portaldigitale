@@ -31,6 +31,15 @@ export interface Category {
   created_at: string;
 }
 
+export interface Subcategory {
+  id: string;
+  name: string;
+  description: string | null;
+  category_id: string;
+  created_at: string;
+  category?: Category;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -80,10 +89,12 @@ export interface FileItem {
   file_type: string | null;
   file_size: number | null;
   category: string | null;
+  subcategory_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
   visibility?: AppRole[];
+  subcategory?: Subcategory;
 }
 
 export interface FileVisibility {

@@ -99,6 +99,7 @@ export type Database = {
           file_url: string
           id: string
           name: string
+          subcategory_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -111,6 +112,7 @@ export type Database = {
           file_url: string
           id?: string
           name: string
+          subcategory_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -123,9 +125,18 @@ export type Database = {
           file_url?: string
           id?: string
           name?: string
+          subcategory_id?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "files_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "subcategories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notification_reads: {
         Row: {
@@ -304,6 +315,38 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      subcategories: {
+        Row: {
+          category_id: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subcategories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_notifications: {
         Row: {
