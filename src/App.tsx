@@ -9,7 +9,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import Products from "./pages/Products";
+// import Products from "./pages/Products"; // Desabilitado
 import Categories from "./pages/Categories";
 import Users from "./pages/Users";
 import Downloads from "./pages/Downloads";
@@ -41,14 +41,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/produtos"
-              element={
-                <ProtectedRoute>
-                  <Products />
-                </ProtectedRoute>
-              }
-            />
+            {/* Produtos desabilitado */}
             <Route
               path="/categorias"
               element={
