@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import RoleBadge from '@/components/RoleBadge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { User, Lock, Mail, Phone, Loader2, Pencil, Check, X } from 'lucide-react';
+import { User, Lock, Mail, Phone, Loader2, Pencil, Check, X, Camera } from 'lucide-react';
 import { z } from 'zod';
 
 const passwordSchema = z.object({
@@ -32,6 +32,10 @@ const Profile: React.FC = () => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(user?.profile?.full_name || '');
   const [savingName, setSavingName] = useState(false);
+
+  // Avatar state
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,7 +102,6 @@ const Profile: React.FC = () => {
       });
 
       setIsEditingName(false);
-      // Reload to reflect changes
       window.location.reload();
     } catch (error) {
       toast({
@@ -115,6 +118,76 @@ const Profile: React.FC = () => {
     setEditedName(user?.profile?.full_name || '');
     setIsEditingName(false);
   };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user?.id) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: 'Erro',
+        description: 'Por favor, selecione uma imagem válida',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: 'Erro',
+        description: 'A imagem deve ter no máximo 2MB',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUploadingAvatar(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${user.id}/avatar.${fileExt}`;
+
+      // Upload to storage
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      // Update profile with avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: `${publicUrl}?t=${Date.now()}` })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: 'Sucesso',
+        description: 'Foto atualizada com sucesso',
+      });
+
+      window.location.reload();
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      toast({
+        title: 'Erro',
+        description: 'Erro ao fazer upload da foto',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const avatarUrl = user?.profile?.avatar_url;
 
   return (
     <DashboardLayout>
@@ -135,8 +208,36 @@ const Profile: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full gradient-primary flex items-center justify-center text-primary-foreground text-xl font-bold">
-                {(isEditingName ? editedName : user?.profile?.full_name)?.charAt(0) || 'U'}
+              <div className="relative group">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Avatar"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-border"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full gradient-primary flex items-center justify-center text-primary-foreground text-xl font-bold">
+                    {(isEditingName ? editedName : user?.profile?.full_name)?.charAt(0) || 'U'}
+                  </div>
+                )}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                >
+                  {uploadingAvatar ? (
+                    <Loader2 className="w-5 h-5 text-white animate-spin" />
+                  ) : (
+                    <Camera className="w-5 h-5 text-white" />
+                  )}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                />
               </div>
               <div className="flex-1">
                 {isEditingName ? (
@@ -189,6 +290,10 @@ const Profile: React.FC = () => {
                 {user?.role && <RoleBadge role={user.role} />}
               </div>
             </div>
+
+            <p className="text-xs text-muted-foreground">
+              Clique na foto para alterar (máximo 2MB)
+            </p>
 
             <div className="grid gap-4 pt-4">
               <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
