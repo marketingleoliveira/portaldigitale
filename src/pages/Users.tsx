@@ -41,7 +41,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, Search, MoreVertical, UserPlus, Key, UserX, UserCheck, Loader2 } from 'lucide-react';
+import { Plus, Search, MoreVertical, UserPlus, Key, UserX, UserCheck, Loader2, Shield } from 'lucide-react';
 import { z } from 'zod';
 
 const userSchema = z.object({
@@ -62,6 +62,9 @@ const Users: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
+  const [editRole, setEditRole] = useState<AppRole>('vendedor');
   const [saving, setSaving] = useState(false);
 
   const [newUser, setNewUser] = useState({
@@ -207,6 +210,54 @@ const Users: React.FC = () => {
         description: 'Erro ao atualizar usuário',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleUpdateRole = async () => {
+    if (!editingUser) return;
+
+    setSaving(true);
+    try {
+      // Check if user has a role record
+      const { data: existingRole } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('user_id', editingUser.id)
+        .maybeSingle();
+
+      if (existingRole) {
+        // Update existing role
+        const { error } = await supabase
+          .from('user_roles')
+          .update({ role: editRole })
+          .eq('user_id', editingUser.id);
+
+        if (error) throw error;
+      } else {
+        // Insert new role
+        const { error } = await supabase
+          .from('user_roles')
+          .insert({ user_id: editingUser.id, role: editRole });
+
+        if (error) throw error;
+      }
+
+      toast({
+        title: 'Sucesso',
+        description: `Cargo atualizado para ${ROLE_LABELS[editRole]}`,
+      });
+
+      setEditDialogOpen(false);
+      setEditingUser(null);
+      fetchUsers();
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao atualizar cargo',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -380,6 +431,16 @@ const Users: React.FC = () => {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="bg-popover">
                             <DropdownMenuItem
+                              onClick={() => {
+                                setEditingUser(u);
+                                setEditRole(u.role || 'vendedor');
+                                setEditDialogOpen(true);
+                              }}
+                            >
+                              <Shield className="w-4 h-4 mr-2" />
+                              Editar Cargo
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
                               onClick={() => handleToggleActive(u.id, u.is_active)}
                             >
                               {u.is_active ? (
@@ -415,6 +476,51 @@ const Users: React.FC = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Edit Role Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar Cargo</DialogTitle>
+              <DialogDescription>
+                Altere o cargo de {editingUser?.full_name}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-role">Cargo</Label>
+                <Select
+                  value={editRole}
+                  onValueChange={(value) => setEditRole(value as AppRole)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="vendedor">Vendedor</SelectItem>
+                    <SelectItem value="gerente">Gerente</SelectItem>
+                    <SelectItem value="admin">Administrador</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleUpdateRole} disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  'Salvar'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
