@@ -281,10 +281,6 @@ const Login: React.FC = () => {
           </CardContent>
         </Card>
         
-        {/* Footer */}
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Sistema desenvolvido por Leonardo Oliveira
-        </p>
       </div>
     </div>
   );
