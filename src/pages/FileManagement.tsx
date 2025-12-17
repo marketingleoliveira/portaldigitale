@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
-import { FileItem, AppRole, ROLE_LABELS } from '@/types/auth';
+import { FileItem, AppRole, ROLE_LABELS, Subcategory } from '@/types/auth';
 import { 
   Plus, 
   Trash2, 
@@ -69,6 +69,7 @@ const FileManagement: React.FC = () => {
   const { user } = useAuth();
   const [files, setFiles] = useState<FileItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -83,13 +84,15 @@ const FileManagement: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    category: '',
+    category_id: '',
+    subcategory_id: '',
     visibility: ['vendedor'] as AppRole[],
   });
   const [editFormData, setEditFormData] = useState({
     name: '',
     description: '',
-    category: '',
+    category_id: '',
+    subcategory_id: '',
     visibility: [] as AppRole[],
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -97,6 +100,7 @@ const FileManagement: React.FC = () => {
   useEffect(() => {
     fetchFiles();
     fetchCategories();
+    fetchSubcategories();
   }, []);
 
   const fetchCategories = async () => {
@@ -113,6 +117,20 @@ const FileManagement: React.FC = () => {
     }
   };
 
+  const fetchSubcategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('subcategories')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      setSubcategories(data || []);
+    } catch (error) {
+      console.error('Error fetching subcategories:', error);
+    }
+  };
+
   const fetchFiles = async () => {
     try {
       const { data: filesData, error } = await supabase
@@ -122,22 +140,33 @@ const FileManagement: React.FC = () => {
 
       if (error) throw error;
 
-      // Fetch visibility for each file
-      const filesWithVisibility = await Promise.all(
+      // Fetch visibility and subcategory info for each file
+      const filesWithDetails = await Promise.all(
         (filesData || []).map(async (file) => {
           const { data: visibility } = await supabase
             .from('file_visibility')
             .select('visible_to_role')
             .eq('file_id', file.id);
           
+          let subcategory: Subcategory | undefined;
+          if (file.subcategory_id) {
+            const { data: subData } = await supabase
+              .from('subcategories')
+              .select('*')
+              .eq('id', file.subcategory_id)
+              .maybeSingle();
+            subcategory = subData || undefined;
+          }
+          
           return {
             ...file,
             visibility: visibility?.map(v => v.visible_to_role as AppRole) || [],
+            subcategory,
           };
         })
       );
 
-      setFiles(filesWithVisibility);
+      setFiles(filesWithDetails);
     } catch (error) {
       console.error('Error fetching files:', error);
       toast.error('Erro ao carregar arquivos');
@@ -174,12 +203,42 @@ const FileManagement: React.FC = () => {
     }));
   };
 
+  const handleCategoryChange = (categoryId: string) => {
+    setFormData(prev => ({ ...prev, category_id: categoryId, subcategory_id: '' }));
+  };
+
+  const handleEditCategoryChange = (categoryId: string) => {
+    setEditFormData(prev => ({ ...prev, category_id: categoryId, subcategory_id: '' }));
+  };
+
+  const getSubcategoriesForCategory = (categoryId: string) => {
+    return subcategories.filter(sub => sub.category_id === categoryId);
+  };
+
+  const getCategoryName = (categoryId: string) => {
+    return categories.find(cat => cat.id === categoryId)?.name || '';
+  };
+
+  const getSubcategoryName = (subcategoryId: string) => {
+    return subcategories.find(sub => sub.id === subcategoryId)?.name || '';
+  };
+
   const openEditDialog = (file: FileItem) => {
     setFileToEdit(file);
+    // Find category_id from the file's category name or subcategory
+    let categoryId = '';
+    if (file.subcategory_id && file.subcategory) {
+      categoryId = file.subcategory.category_id;
+    } else if (file.category) {
+      const cat = categories.find(c => c.name === file.category);
+      categoryId = cat?.id || '';
+    }
+    
     setEditFormData({
       name: file.name,
       description: file.description || '',
-      category: file.category || '',
+      category_id: categoryId,
+      subcategory_id: file.subcategory_id || '',
       visibility: file.visibility || [],
     });
     setEditDialogOpen(true);
@@ -201,13 +260,17 @@ const FileManagement: React.FC = () => {
     setUpdating(true);
 
     try {
+      // Get category name for backwards compatibility
+      const categoryName = editFormData.category_id ? getCategoryName(editFormData.category_id) : null;
+
       // Update file record
       const { error: updateError } = await supabase
         .from('files')
         .update({
           name: editFormData.name,
           description: editFormData.description || null,
-          category: editFormData.category || null,
+          category: categoryName,
+          subcategory_id: editFormData.subcategory_id || null,
         })
         .eq('id', fileToEdit.id);
 
@@ -279,6 +342,9 @@ const FileManagement: React.FC = () => {
         .from('files')
         .getPublicUrl(fileName);
 
+      // Get category name for backwards compatibility
+      const categoryName = formData.category_id ? getCategoryName(formData.category_id) : null;
+
       // Insert file record
       const { data: fileRecord, error: insertError } = await supabase
         .from('files')
@@ -288,7 +354,8 @@ const FileManagement: React.FC = () => {
           file_url: publicUrl,
           file_type: selectedFile.type,
           file_size: selectedFile.size,
-          category: formData.category || null,
+          category: categoryName,
+          subcategory_id: formData.subcategory_id || null,
           created_by: user?.id,
         })
         .select()
@@ -353,7 +420,8 @@ const FileManagement: React.FC = () => {
     setFormData({
       name: '',
       description: '',
-      category: '',
+      category_id: '',
+      subcategory_id: '',
       visibility: ['vendedor'],
     });
     setSelectedFile(null);
@@ -366,10 +434,22 @@ const FileManagement: React.FC = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const getFileDisplayCategory = (file: FileItem) => {
+    if (file.subcategory) {
+      const cat = categories.find(c => c.id === file.subcategory?.category_id);
+      return `${cat?.name || ''} > ${file.subcategory.name}`;
+    }
+    return file.category || '-';
+  };
+
   const filteredFiles = files.filter(file =>
     file.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    file.category?.toLowerCase().includes(searchTerm.toLowerCase())
+    file.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    file.subcategory?.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const filteredSubcategories = getSubcategoriesForCategory(formData.category_id);
+  const editFilteredSubcategories = getSubcategoriesForCategory(editFormData.category_id);
 
   return (
     <DashboardLayout>
@@ -455,20 +535,20 @@ const FileManagement: React.FC = () => {
                 <div className="space-y-2">
                   <Label htmlFor="category">Categoria</Label>
                   <Select
-                    value={formData.category}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}
+                    value={formData.category_id}
+                    onValueChange={handleCategoryChange}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione uma categoria" />
                     </SelectTrigger>
                     <SelectContent>
                       {categories.length === 0 ? (
-                        <SelectItem value="" disabled>
+                        <SelectItem value="none" disabled>
                           Nenhuma categoria cadastrada
                         </SelectItem>
                       ) : (
                         categories.map((category) => (
-                          <SelectItem key={category.id} value={category.name}>
+                          <SelectItem key={category.id} value={category.id}>
                             {category.name}
                           </SelectItem>
                         ))
@@ -481,6 +561,34 @@ const FileManagement: React.FC = () => {
                     </p>
                   )}
                 </div>
+
+                {/* Subcategory */}
+                {formData.category_id && (
+                  <div className="space-y-2">
+                    <Label htmlFor="subcategory">Subcategoria</Label>
+                    <Select
+                      value={formData.subcategory_id}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, subcategory_id: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma subcategoria (opcional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filteredSubcategories.length === 0 ? (
+                          <SelectItem value="none" disabled>
+                            Nenhuma subcategoria nesta categoria
+                          </SelectItem>
+                        ) : (
+                          filteredSubcategories.map((sub) => (
+                            <SelectItem key={sub.id} value={sub.id}>
+                              {sub.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 {/* Visibility */}
                 <div className="space-y-2">
@@ -589,7 +697,7 @@ const FileManagement: React.FC = () => {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>{file.category || '-'}</TableCell>
+                        <TableCell>{getFileDisplayCategory(file)}</TableCell>
                         <TableCell>{formatFileSize(file.file_size)}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
@@ -693,20 +801,20 @@ const FileManagement: React.FC = () => {
               <div className="space-y-2">
                 <Label htmlFor="edit-category">Categoria</Label>
                 <Select
-                  value={editFormData.category}
-                  onValueChange={(value) => setEditFormData(prev => ({ ...prev, category: value }))}
+                  value={editFormData.category_id}
+                  onValueChange={handleEditCategoryChange}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione uma categoria" />
                   </SelectTrigger>
                   <SelectContent>
                     {categories.length === 0 ? (
-                      <SelectItem value="" disabled>
+                      <SelectItem value="none" disabled>
                         Nenhuma categoria cadastrada
                       </SelectItem>
                     ) : (
                       categories.map((category) => (
-                        <SelectItem key={category.id} value={category.name}>
+                        <SelectItem key={category.id} value={category.id}>
                           {category.name}
                         </SelectItem>
                       ))
@@ -714,6 +822,34 @@ const FileManagement: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Subcategory */}
+              {editFormData.category_id && (
+                <div className="space-y-2">
+                  <Label htmlFor="edit-subcategory">Subcategoria</Label>
+                  <Select
+                    value={editFormData.subcategory_id}
+                    onValueChange={(value) => setEditFormData(prev => ({ ...prev, subcategory_id: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione uma subcategoria (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {editFilteredSubcategories.length === 0 ? (
+                        <SelectItem value="none" disabled>
+                          Nenhuma subcategoria nesta categoria
+                        </SelectItem>
+                      ) : (
+                        editFilteredSubcategories.map((sub) => (
+                          <SelectItem key={sub.id} value={sub.id}>
+                            {sub.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Visibility */}
               <div className="space-y-2">

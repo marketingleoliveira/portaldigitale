@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
-import { Category } from '@/types/auth';
+import { Category, Subcategory } from '@/types/auth';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -19,6 +19,13 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -26,37 +33,56 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Search, FolderOpen, Trash2, Edit, Loader2 } from 'lucide-react';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { Plus, Search, FolderOpen, Trash2, Loader2, FolderTree } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 const Categories: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [subcategoryDialogOpen, setSubcategoryDialogOpen] = useState(false);
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [savingSubcategory, setSavingSubcategory] = useState(false);
 
   const [newCategory, setNewCategory] = useState({
     name: '',
     description: '',
   });
 
+  const [newSubcategory, setNewSubcategory] = useState({
+    name: '',
+    description: '',
+    category_id: '',
+  });
+
   useEffect(() => {
-    fetchCategories();
+    fetchData();
   }, []);
 
-  const fetchCategories = async () => {
+  const fetchData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name');
+      const [categoriesRes, subcategoriesRes] = await Promise.all([
+        supabase.from('categories').select('*').order('name'),
+        supabase.from('subcategories').select('*').order('name'),
+      ]);
 
-      if (error) throw error;
-      setCategories(data || []);
+      if (categoriesRes.error) throw categoriesRes.error;
+      if (subcategoriesRes.error) throw subcategoriesRes.error;
+
+      setCategories(categoriesRes.data || []);
+      setSubcategories(subcategoriesRes.data || []);
     } catch (error) {
-      console.error('Error fetching categories:', error);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
@@ -72,7 +98,7 @@ const Categories: React.FC = () => {
       return;
     }
 
-    setSaving(true);
+    setSavingCategory(true);
 
     try {
       const { error } = await supabase.from('categories').insert({
@@ -87,9 +113,9 @@ const Categories: React.FC = () => {
         description: 'Categoria criada com sucesso',
       });
 
-      setDialogOpen(false);
+      setCategoryDialogOpen(false);
       setNewCategory({ name: '', description: '' });
-      fetchCategories();
+      fetchData();
     } catch (error) {
       toast({
         title: 'Erro',
@@ -97,11 +123,70 @@ const Categories: React.FC = () => {
         variant: 'destructive',
       });
     } finally {
-      setSaving(false);
+      setSavingCategory(false);
+    }
+  };
+
+  const handleCreateSubcategory = async () => {
+    if (!newSubcategory.name.trim()) {
+      toast({
+        title: 'Erro',
+        description: 'Nome da subcategoria é obrigatório',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!newSubcategory.category_id) {
+      toast({
+        title: 'Erro',
+        description: 'Selecione uma categoria',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSavingSubcategory(true);
+
+    try {
+      const { error } = await supabase.from('subcategories').insert({
+        name: newSubcategory.name,
+        description: newSubcategory.description || null,
+        category_id: newSubcategory.category_id,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso',
+        description: 'Subcategoria criada com sucesso',
+      });
+
+      setSubcategoryDialogOpen(false);
+      setNewSubcategory({ name: '', description: '', category_id: '' });
+      fetchData();
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao criar subcategoria',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingSubcategory(false);
     }
   };
 
   const handleDeleteCategory = async (id: string) => {
+    const hasSubcategories = subcategories.some(sub => sub.category_id === id);
+    if (hasSubcategories) {
+      toast({
+        title: 'Erro',
+        description: 'Exclua as subcategorias desta categoria antes de excluí-la',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!confirm('Tem certeza que deseja excluir esta categoria?')) return;
 
     try {
@@ -114,7 +199,7 @@ const Categories: React.FC = () => {
         description: 'Categoria excluída',
       });
 
-      fetchCategories();
+      fetchData();
     } catch (error) {
       toast({
         title: 'Erro',
@@ -122,6 +207,37 @@ const Categories: React.FC = () => {
         variant: 'destructive',
       });
     }
+  };
+
+  const handleDeleteSubcategory = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta subcategoria?')) return;
+
+    try {
+      const { error } = await supabase.from('subcategories').delete().eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso',
+        description: 'Subcategoria excluída',
+      });
+
+      fetchData();
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao excluir subcategoria',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const getSubcategoriesForCategory = (categoryId: string) => {
+    return subcategories.filter(sub => sub.category_id === categoryId);
+  };
+
+  const getCategoryName = (categoryId: string) => {
+    return categories.find(cat => cat.id === categoryId)?.name || '';
   };
 
   const filteredCategories = categories.filter((cat) =>
@@ -147,59 +263,133 @@ const Categories: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">Categorias</h1>
-            <p className="text-muted-foreground">Organize os produtos por categorias</p>
+            <p className="text-muted-foreground">Organize os materiais por categorias e subcategorias</p>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="shadow-primary">
-                <Plus className="w-4 h-4 mr-2" />
-                Nova Categoria
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Criar Categoria</DialogTitle>
-                <DialogDescription>
-                  Adicione uma nova categoria para organizar os produtos
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome *</Label>
-                  <Input
-                    id="name"
-                    value={newCategory.name}
-                    onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
-                    placeholder="Nome da categoria"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descrição</Label>
-                  <Textarea
-                    id="description"
-                    value={newCategory.description}
-                    onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })}
-                    placeholder="Descrição opcional"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                  Cancelar
+          <div className="flex gap-2">
+            {/* Subcategory Dialog */}
+            <Dialog open={subcategoryDialogOpen} onOpenChange={setSubcategoryDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" disabled={categories.length === 0}>
+                  <FolderTree className="w-4 h-4 mr-2" />
+                  Nova Subcategoria
                 </Button>
-                <Button onClick={handleCreateCategory} disabled={saving}>
-                  {saving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Criando...
-                    </>
-                  ) : (
-                    'Criar'
-                  )}
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Criar Subcategoria</DialogTitle>
+                  <DialogDescription>
+                    Adicione uma nova subcategoria dentro de uma categoria existente
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="sub-category">Categoria *</Label>
+                    <Select
+                      value={newSubcategory.category_id}
+                      onValueChange={(value) => setNewSubcategory({ ...newSubcategory, category_id: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sub-name">Nome *</Label>
+                    <Input
+                      id="sub-name"
+                      value={newSubcategory.name}
+                      onChange={(e) => setNewSubcategory({ ...newSubcategory, name: e.target.value })}
+                      placeholder="Nome da subcategoria"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sub-description">Descrição</Label>
+                    <Textarea
+                      id="sub-description"
+                      value={newSubcategory.description}
+                      onChange={(e) => setNewSubcategory({ ...newSubcategory, description: e.target.value })}
+                      placeholder="Descrição opcional"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setSubcategoryDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleCreateSubcategory} disabled={savingSubcategory}>
+                    {savingSubcategory ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Criando...
+                      </>
+                    ) : (
+                      'Criar'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Category Dialog */}
+            <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="shadow-primary">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nova Categoria
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Criar Categoria</DialogTitle>
+                  <DialogDescription>
+                    Adicione uma nova categoria para organizar os materiais
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nome *</Label>
+                    <Input
+                      id="name"
+                      value={newCategory.name}
+                      onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+                      placeholder="Nome da categoria"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Descrição</Label>
+                    <Textarea
+                      id="description"
+                      value={newCategory.description}
+                      onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })}
+                      placeholder="Descrição opcional"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setCategoryDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleCreateCategory} disabled={savingCategory}>
+                    {savingCategory ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Criando...
+                      </>
+                    ) : (
+                      'Criar'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {/* Search */}
@@ -217,59 +407,109 @@ const Categories: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Categories Table */}
+        {/* Categories with Subcategories */}
         <Card>
           <CardContent className="p-0">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
+            ) : filteredCategories.length === 0 ? (
+              <div className="text-center py-12">
+                <FolderOpen className="w-12 h-12 mx-auto text-muted-foreground mb-2" />
+                <p className="text-muted-foreground">Nenhuma categoria encontrada</p>
+              </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Criado em</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredCategories.map((cat) => (
-                    <TableRow key={cat.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <FolderOpen className="w-4 h-4 text-primary" />
+              <Accordion type="multiple" className="w-full">
+                {filteredCategories.map((cat) => {
+                  const catSubcategories = getSubcategoriesForCategory(cat.id);
+                  return (
+                    <AccordionItem key={cat.id} value={cat.id}>
+                      <AccordionTrigger className="px-4 hover:no-underline">
+                        <div className="flex items-center gap-3 flex-1">
+                          <FolderOpen className="w-5 h-5 text-primary" />
                           <span className="font-medium">{cat.name}</span>
+                          {catSubcategories.length > 0 && (
+                            <Badge variant="secondary" className="ml-2">
+                              {catSubcategories.length} subcategoria{catSubcategories.length > 1 ? 's' : ''}
+                            </Badge>
+                          )}
                         </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {cat.description || '-'}
-                      </TableCell>
-                      <TableCell>
-                        {new Date(cat.created_at).toLocaleDateString('pt-BR')}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteCategory(cat.id)}
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredCategories.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8">
-                        <FolderOpen className="w-12 h-12 mx-auto text-muted-foreground mb-2" />
-                        <p className="text-muted-foreground">Nenhuma categoria encontrada</p>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <div className="space-y-4">
+                          {cat.description && (
+                            <p className="text-sm text-muted-foreground pl-8">{cat.description}</p>
+                          )}
+                          <div className="flex items-center justify-between pl-8">
+                            <span className="text-xs text-muted-foreground">
+                              Criada em: {new Date(cat.created_at).toLocaleDateString('pt-BR')}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteCategory(cat.id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4 mr-1" />
+                              Excluir categoria
+                            </Button>
+                          </div>
+
+                          {catSubcategories.length > 0 && (
+                            <div className="mt-4 pl-8">
+                              <h4 className="text-sm font-medium mb-2">Subcategorias:</h4>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Nome</TableHead>
+                                    <TableHead>Descrição</TableHead>
+                                    <TableHead>Criada em</TableHead>
+                                    <TableHead className="text-right">Ações</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {catSubcategories.map((sub) => (
+                                    <TableRow key={sub.id}>
+                                      <TableCell>
+                                        <div className="flex items-center gap-2">
+                                          <FolderTree className="w-4 h-4 text-muted-foreground" />
+                                          <span>{sub.name}</span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-muted-foreground">
+                                        {sub.description || '-'}
+                                      </TableCell>
+                                      <TableCell>
+                                        {new Date(sub.created_at).toLocaleDateString('pt-BR')}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => handleDeleteSubcategory(sub.id)}
+                                        >
+                                          <Trash2 className="w-4 h-4 text-destructive" />
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+
+                          {catSubcategories.length === 0 && (
+                            <p className="text-sm text-muted-foreground pl-8 italic">
+                              Nenhuma subcategoria nesta categoria
+                            </p>
+                          )}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
+              </Accordion>
             )}
           </CardContent>
         </Card>
