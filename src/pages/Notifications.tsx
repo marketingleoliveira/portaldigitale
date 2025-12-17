@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Notification, AppRole } from '@/types/auth';
 import RoleBadge from '@/components/RoleBadge';
 import { useToast } from '@/hooks/use-toast';
+import { useUnreadNotifications } from '@/hooks/useUnreadNotifications';
 import {
   Dialog,
   DialogContent,
@@ -47,6 +48,7 @@ interface UserNotification {
 const Notifications: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { markAllAsRead } = useUnreadNotifications();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [userNotifications, setUserNotifications] = useState<UserNotification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +72,15 @@ const Notifications: React.FC = () => {
       fetchUsers();
     }
   }, [canCreateNotifications]);
+
+  // Mark all notifications as read when visiting this page
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      markAllAsRead();
+    }, 1000); // Small delay to ensure notifications are loaded first
+
+    return () => clearTimeout(timer);
+  }, [markAllAsRead]);
 
   const fetchNotifications = async () => {
     try {

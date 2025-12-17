@@ -27,6 +27,8 @@ import {
   Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import UnreadNotificationsAlert from '@/components/UnreadNotificationsAlert';
+import { useUnreadNotifications } from '@/hooks/useUnreadNotifications';
 
 interface NavItem {
   label: string;
@@ -54,6 +56,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { unreadCount } = useUnreadNotifications();
 
   const filteredNavItems = navItems.filter(item => 
     user?.role && item.roles.includes(user.role)
@@ -113,9 +116,17 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           {/* User Info */}
           <div className="p-4 border-t border-sidebar-border">
             <div className="flex items-center gap-3 px-2">
-              <div className="w-10 h-10 rounded-full bg-sidebar-accent flex items-center justify-center">
-                <User className="w-5 h-5" />
-              </div>
+              {user?.profile?.avatar_url ? (
+                <img
+                  src={user.profile.avatar_url}
+                  alt="Avatar"
+                  className="w-10 h-10 rounded-full object-cover border border-sidebar-border"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-sidebar-accent flex items-center justify-center">
+                  <User className="w-5 h-5" />
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">
                   {user?.profile?.full_name || 'Usuário'}
@@ -149,17 +160,34 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="relative">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="relative"
+                onClick={() => navigate('/notificacoes')}
+              >
                 <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
+                {unreadCount.total > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
+                    {unreadCount.total > 9 ? '9+' : unreadCount.total}
+                  </span>
+                )}
               </Button>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <User className="w-4 h-4 text-primary" />
-                    </div>
+                    {user?.profile?.avatar_url ? (
+                      <img
+                        src={user.profile.avatar_url}
+                        alt="Avatar"
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="w-4 h-4 text-primary" />
+                      </div>
+                    )}
                     <span className="hidden sm:inline-block">
                       {user?.profile?.full_name?.split(' ')[0] || 'Usuário'}
                     </span>
@@ -193,6 +221,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         <main className="flex-1 p-4 lg:p-6 overflow-auto">
           {children}
         </main>
+
+        {/* Unread Notifications Alert */}
+        <UnreadNotificationsAlert />
       </div>
     </div>
   );
