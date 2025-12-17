@@ -13,6 +13,7 @@ import Products from "./pages/Products";
 import Categories from "./pages/Categories";
 import Users from "./pages/Users";
 import Downloads from "./pages/Downloads";
+import FileManagement from "./pages/FileManagement";
 import Notifications from "./pages/Notifications";
 import Reports from "./pages/Reports";
 import Profile from "./pages/Profile";
@@ -61,6 +62,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <Users />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/arquivos"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <FileManagement />
                 </ProtectedRoute>
               }
             />

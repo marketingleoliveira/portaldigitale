@@ -71,6 +71,26 @@ export interface AccessLog {
   created_at: string;
 }
 
+export interface FileItem {
+  id: string;
+  name: string;
+  description: string | null;
+  file_url: string;
+  file_type: string | null;
+  file_size: number | null;
+  category: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  visibility?: AppRole[];
+}
+
+export interface FileVisibility {
+  id: string;
+  file_id: string;
+  visible_to_role: AppRole;
+}
+
 export const ROLE_LABELS: Record<AppRole, string> = {
   admin: 'Administrador',
   gerente: 'Gerente',

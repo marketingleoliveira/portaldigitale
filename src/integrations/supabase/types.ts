@@ -62,6 +62,71 @@ export type Database = {
         }
         Relationships: []
       }
+      file_visibility: {
+        Row: {
+          file_id: string
+          id: string
+          visible_to_role: Database["public"]["Enums"]["app_role"]
+        }
+        Insert: {
+          file_id: string
+          id?: string
+          visible_to_role: Database["public"]["Enums"]["app_role"]
+        }
+        Update: {
+          file_id?: string
+          id?: string
+          visible_to_role?: Database["public"]["Enums"]["app_role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_visibility_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      files: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          file_size: number | null
+          file_type: string | null
+          file_url: string
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url: string
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string | null
@@ -221,6 +286,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_view_file: {
+        Args: { _file_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_view_product: {
         Args: { _product_id: string; _user_id: string }
         Returns: boolean
