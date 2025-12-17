@@ -17,7 +17,8 @@ import {
   Download,
   Loader2,
   File,
-  X
+  X,
+  Pencil
 } from 'lucide-react';
 import {
   Dialog,
@@ -71,9 +72,12 @@ const FileManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null);
+  const [fileToEdit, setFileToEdit] = useState<FileItem | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [updating, setUpdating] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -81,6 +85,12 @@ const FileManagement: React.FC = () => {
     description: '',
     category: '',
     visibility: ['vendedor'] as AppRole[],
+  });
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    description: '',
+    category: '',
+    visibility: [] as AppRole[],
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -153,6 +163,86 @@ const FileManagement: React.FC = () => {
         ? [...prev.visibility, role]
         : prev.visibility.filter(r => r !== role),
     }));
+  };
+
+  const handleEditVisibilityChange = (role: AppRole, checked: boolean) => {
+    setEditFormData(prev => ({
+      ...prev,
+      visibility: checked
+        ? [...prev.visibility, role]
+        : prev.visibility.filter(r => r !== role),
+    }));
+  };
+
+  const openEditDialog = (file: FileItem) => {
+    setFileToEdit(file);
+    setEditFormData({
+      name: file.name,
+      description: file.description || '',
+      category: file.category || '',
+      visibility: file.visibility || [],
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!fileToEdit) return;
+
+    if (!editFormData.name.trim()) {
+      toast.error('Informe o nome do arquivo');
+      return;
+    }
+
+    if (editFormData.visibility.length === 0) {
+      toast.error('Selecione pelo menos um cargo para visualização');
+      return;
+    }
+
+    setUpdating(true);
+
+    try {
+      // Update file record
+      const { error: updateError } = await supabase
+        .from('files')
+        .update({
+          name: editFormData.name,
+          description: editFormData.description || null,
+          category: editFormData.category || null,
+        })
+        .eq('id', fileToEdit.id);
+
+      if (updateError) throw updateError;
+
+      // Delete existing visibility records
+      const { error: deleteVisibilityError } = await supabase
+        .from('file_visibility')
+        .delete()
+        .eq('file_id', fileToEdit.id);
+
+      if (deleteVisibilityError) throw deleteVisibilityError;
+
+      // Insert new visibility records
+      const visibilityRecords = editFormData.visibility.map(role => ({
+        file_id: fileToEdit.id,
+        visible_to_role: role,
+      }));
+
+      const { error: visibilityError } = await supabase
+        .from('file_visibility')
+        .insert(visibilityRecords);
+
+      if (visibilityError) throw visibilityError;
+
+      toast.success('Arquivo atualizado com sucesso');
+      setEditDialogOpen(false);
+      setFileToEdit(null);
+      fetchFiles();
+    } catch (error: any) {
+      console.error('Error updating file:', error);
+      toast.error(error.message || 'Erro ao atualizar arquivo');
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const handleUpload = async () => {
@@ -522,6 +612,13 @@ const FileManagement: React.FC = () => {
                             <Button
                               variant="outline"
                               size="icon"
+                              onClick={() => openEditDialog(file)}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
                               onClick={() => {
                                 setFileToDelete(file);
                                 setDeleteDialogOpen(true);
@@ -558,6 +655,107 @@ const FileManagement: React.FC = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Edit Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Editar Arquivo</DialogTitle>
+              <DialogDescription>
+                Altere as informações do arquivo
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              {/* Name */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Nome *</Label>
+                <Input
+                  id="edit-name"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Nome do arquivo"
+                />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Descrição</Label>
+                <Textarea
+                  id="edit-description"
+                  value={editFormData.description}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Descrição opcional"
+                  rows={2}
+                />
+              </div>
+
+              {/* Category */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-category">Categoria</Label>
+                <Select
+                  value={editFormData.category}
+                  onValueChange={(value) => setEditFormData(prev => ({ ...prev, category: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.length === 0 ? (
+                      <SelectItem value="" disabled>
+                        Nenhuma categoria cadastrada
+                      </SelectItem>
+                    ) : (
+                      categories.map((category) => (
+                        <SelectItem key={category.id} value={category.name}>
+                          {category.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Visibility */}
+              <div className="space-y-2">
+                <Label>Visível para *</Label>
+                <div className="flex flex-wrap gap-4">
+                  {ALL_ROLES.map(role => (
+                    <div key={role} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`edit-role-${role}`}
+                        checked={editFormData.visibility.includes(role)}
+                        onCheckedChange={(checked) => 
+                          handleEditVisibilityChange(role, checked as boolean)
+                        }
+                      />
+                      <label
+                        htmlFor={`edit-role-${role}`}
+                        className="text-sm font-medium leading-none cursor-pointer"
+                      >
+                        {ROLE_LABELS[role]}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Button 
+                className="w-full" 
+                onClick={handleUpdate}
+                disabled={updating}
+              >
+                {updating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  'Salvar Alterações'
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
