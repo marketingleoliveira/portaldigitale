@@ -28,6 +28,13 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -51,9 +58,16 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const ALL_ROLES: AppRole[] = ['admin', 'gerente', 'vendedor'];
 
+interface Category {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
 const FileManagement: React.FC = () => {
   const { user } = useAuth();
   const [files, setFiles] = useState<FileItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -72,7 +86,22 @@ const FileManagement: React.FC = () => {
 
   useEffect(() => {
     fetchFiles();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   const fetchFiles = async () => {
     try {
@@ -335,12 +364,32 @@ const FileManagement: React.FC = () => {
                 {/* Category */}
                 <div className="space-y-2">
                   <Label htmlFor="category">Categoria</Label>
-                  <Input
-                    id="category"
+                  <Select
                     value={formData.category}
-                    onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                    placeholder="Ex: Catálogos, Manuais, etc."
-                  />
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione uma categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.length === 0 ? (
+                        <SelectItem value="" disabled>
+                          Nenhuma categoria cadastrada
+                        </SelectItem>
+                      ) : (
+                        categories.map((category) => (
+                          <SelectItem key={category.id} value={category.name}>
+                            {category.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {categories.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Cadastre categorias no menu Categorias primeiro
+                    </p>
+                  )}
                 </div>
 
                 {/* Visibility */}
