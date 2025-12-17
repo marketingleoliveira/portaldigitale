@@ -159,10 +159,9 @@ const Login: React.FC = () => {
       {/* Left Side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 gradient-primary items-center justify-center p-12">
         <div className="text-center text-primary-foreground max-w-md">
-          <div className="w-24 h-24 mx-auto mb-8 bg-primary-foreground/20 rounded-2xl flex items-center justify-center backdrop-blur">
-            <span className="text-4xl font-bold">DT</span>
+          <div className="mx-auto mb-8 flex items-center justify-center">
+            <Logo size="lg" variant="light" />
           </div>
-          <h1 className="text-4xl font-bold mb-4">Digitale Têxtil</h1>
           <p className="text-lg opacity-90">
             Portal Comercial - Acesse seu painel personalizado com informações exclusivas para sua equipe.
           </p>
