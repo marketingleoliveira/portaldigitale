@@ -95,7 +95,7 @@ const FileManagement: React.FC = () => {
     subcategory_id: '',
     visibility: [] as AppRole[],
   });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   useEffect(() => {
     fetchFiles();
@@ -176,13 +176,18 @@ const FileManagement: React.FC = () => {
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      if (!formData.name) {
-        setFormData(prev => ({ ...prev, name: file.name.replace(/\.[^/.]+$/, '') }));
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newFiles = Array.from(files);
+      setSelectedFiles(prev => [...prev, ...newFiles]);
+      if (!formData.name && newFiles.length === 1) {
+        setFormData(prev => ({ ...prev, name: newFiles[0].name.replace(/\.[^/.]+$/, '') }));
       }
     }
+  };
+
+  const removeSelectedFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleVisibilityChange = (role: AppRole, checked: boolean) => {
@@ -309,12 +314,12 @@ const FileManagement: React.FC = () => {
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) {
-      toast.error('Selecione um arquivo');
+    if (selectedFiles.length === 0) {
+      toast.error('Selecione pelo menos um arquivo');
       return;
     }
 
-    if (!formData.name.trim()) {
+    if (selectedFiles.length === 1 && !formData.name.trim()) {
       toast.error('Informe o nome do arquivo');
       return;
     }
@@ -327,61 +332,75 @@ const FileManagement: React.FC = () => {
     setUploading(true);
 
     try {
-      // Upload file to storage
-      const fileExt = selectedFile.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('files')
-        .upload(fileName, selectedFile);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('files')
-        .getPublicUrl(fileName);
-
-      // Get category name for backwards compatibility
       const categoryName = formData.category_id ? getCategoryName(formData.category_id) : null;
+      let successCount = 0;
 
-      // Insert file record
-      const { data: fileRecord, error: insertError } = await supabase
-        .from('files')
-        .insert({
-          name: formData.name,
-          description: formData.description || null,
-          file_url: publicUrl,
-          file_type: selectedFile.type,
-          file_size: selectedFile.size,
-          category: categoryName,
-          subcategory_id: formData.subcategory_id || null,
-          created_by: user?.id,
-        })
-        .select()
-        .single();
+      for (const file of selectedFiles) {
+        // Upload file to storage
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('files')
+          .upload(fileName, file);
 
-      if (insertError) throw insertError;
+        if (uploadError) {
+          console.error(`Error uploading ${file.name}:`, uploadError);
+          continue;
+        }
 
-      // Insert visibility records
-      const visibilityRecords = formData.visibility.map(role => ({
-        file_id: fileRecord.id,
-        visible_to_role: role,
-      }));
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('files')
+          .getPublicUrl(fileName);
 
-      const { error: visibilityError } = await supabase
-        .from('file_visibility')
-        .insert(visibilityRecords);
+        // Use custom name for single file, original name for multiple
+        const displayName = selectedFiles.length === 1 
+          ? formData.name 
+          : file.name.replace(/\.[^/.]+$/, '');
 
-      if (visibilityError) throw visibilityError;
+        // Insert file record
+        const { data: fileRecord, error: insertError } = await supabase
+          .from('files')
+          .insert({
+            name: displayName,
+            description: formData.description || null,
+            file_url: publicUrl,
+            file_type: file.type,
+            file_size: file.size,
+            category: categoryName,
+            subcategory_id: formData.subcategory_id || null,
+            created_by: user?.id,
+          })
+          .select()
+          .single();
 
-      toast.success('Arquivo enviado com sucesso');
-      setDialogOpen(false);
-      resetForm();
-      fetchFiles();
+        if (insertError) {
+          console.error(`Error inserting record for ${file.name}:`, insertError);
+          continue;
+        }
+
+        // Insert visibility records
+        const visibilityRecords = formData.visibility.map(role => ({
+          file_id: fileRecord.id,
+          visible_to_role: role,
+        }));
+
+        await supabase.from('file_visibility').insert(visibilityRecords);
+        successCount++;
+      }
+
+      if (successCount > 0) {
+        toast.success(`${successCount} arquivo(s) enviado(s) com sucesso`);
+        setDialogOpen(false);
+        resetForm();
+        fetchFiles();
+      } else {
+        toast.error('Erro ao enviar arquivos');
+      }
     } catch (error: any) {
-      console.error('Error uploading file:', error);
-      toast.error(error.message || 'Erro ao enviar arquivo');
+      console.error('Error uploading files:', error);
+      toast.error(error.message || 'Erro ao enviar arquivos');
     } finally {
       setUploading(false);
     }
@@ -424,7 +443,7 @@ const FileManagement: React.FC = () => {
       subcategory_id: '',
       visibility: ['vendedor'],
     });
-    setSelectedFile(null);
+    setSelectedFiles([]);
   };
 
   const formatFileSize = (bytes: number | null) => {
@@ -479,45 +498,60 @@ const FileManagement: React.FC = () => {
               <div className="space-y-4 mt-4">
                 {/* File Input */}
                 <div className="space-y-2">
-                  <Label>Arquivo *</Label>
-                  {selectedFile ? (
-                    <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                      <File className="w-5 h-5 text-primary" />
-                      <span className="flex-1 truncate text-sm">{selectedFile.name}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => setSelectedFile(null)}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
+                  <Label>Arquivos *</Label>
+                  {selectedFiles.length > 0 && (
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {selectedFiles.map((file, index) => (
+                        <div key={index} className="flex items-center gap-2 p-2 bg-muted rounded-lg">
+                          <File className="w-4 h-4 text-primary flex-shrink-0" />
+                          <span className="flex-1 truncate text-sm">{file.name}</span>
+                          <span className="text-xs text-muted-foreground flex-shrink-0">
+                            {(file.size / (1024 * 1024)).toFixed(2)} MB
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 flex-shrink-0"
+                            onClick={() => removeSelectedFile(index)}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
                     </div>
-                  ) : (
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
-                      <Upload className="w-8 h-8 text-muted-foreground mb-2" />
-                      <span className="text-sm text-muted-foreground">
-                        Clique para selecionar
-                      </span>
-                      <input
-                        type="file"
-                        className="hidden"
-                        onChange={handleFileSelect}
-                      />
-                    </label>
                   )}
+                  <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+                    <Upload className="w-6 h-6 text-muted-foreground mb-1" />
+                    <span className="text-sm text-muted-foreground">
+                      {selectedFiles.length > 0 ? 'Adicionar mais arquivos' : 'Clique para selecionar'}
+                    </span>
+                    <span className="text-xs text-muted-foreground">Sem limite de tamanho</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      multiple
+                      onChange={handleFileSelect}
+                    />
+                  </label>
                 </div>
 
-                {/* Name */}
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome *</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Nome do arquivo"
-                  />
-                </div>
+                {/* Name - only show for single file */}
+                {selectedFiles.length <= 1 && (
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nome {selectedFiles.length === 1 ? '*' : ''}</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Nome do arquivo"
+                    />
+                    {selectedFiles.length > 1 && (
+                      <p className="text-xs text-muted-foreground">
+                        Para múltiplos arquivos, os nomes originais serão usados
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Description */}
                 <div className="space-y-2">
