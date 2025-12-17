@@ -1,29 +1,25 @@
 import React from 'react';
+import logoImage from '@/assets/logo-digitale-full.png';
 
 interface LogoProps {
   className?: string;
-  showText?: boolean;
   size?: 'sm' | 'md' | 'lg';
 }
 
-const Logo: React.FC<LogoProps> = ({ className = '', showText = true, size = 'md' }) => {
+const Logo: React.FC<LogoProps> = ({ className = '', size = 'md' }) => {
   const sizes = {
-    sm: 'h-8',
-    md: 'h-10',
-    lg: 'h-12',
+    sm: 'h-10',
+    md: 'h-14',
+    lg: 'h-20',
   };
 
   return (
-    <div className={`flex items-center gap-3 ${className}`}>
-      <div className={`${sizes[size]} aspect-square gradient-primary rounded-lg flex items-center justify-center shadow-primary`}>
-        <span className="text-primary-foreground font-bold text-lg">DT</span>
-      </div>
-      {showText && (
-        <div className="flex flex-col">
-          <span className="font-bold text-lg leading-tight">Digitale</span>
-          <span className="text-xs text-muted-foreground leading-tight">Têxtil</span>
-        </div>
-      )}
+    <div className={`flex items-center ${className}`}>
+      <img 
+        src={logoImage} 
+        alt="Digitale Têxtil" 
+        className={`${sizes[size]} w-auto object-contain`}
+      />
     </div>
   );
 };
