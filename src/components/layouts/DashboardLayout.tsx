@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   LayoutDashboard,
-  Package,
   Users,
   Settings,
   Bell,
@@ -38,12 +37,11 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'gerente', 'vendedor'] },
-  { label: 'Produtos', href: '/produtos', icon: Package, roles: ['admin', 'gerente', 'vendedor'] },
   { label: 'Categorias', href: '/categorias', icon: FolderOpen, roles: ['admin'] },
   { label: 'Usuários', href: '/usuarios', icon: Users, roles: ['admin'] },
   { label: 'Arquivos', href: '/arquivos', icon: Upload, roles: ['admin'] },
   { label: 'Relatórios', href: '/relatorios', icon: BarChart3, roles: ['admin', 'gerente'] },
-  { label: 'Downloads', href: '/downloads', icon: FileText, roles: ['admin', 'gerente', 'vendedor'] },
+  { label: 'Materiais Comerciais', href: '/downloads', icon: FileText, roles: ['admin', 'gerente', 'vendedor'] },
   { label: 'Notificações', href: '/notificacoes', icon: Bell, roles: ['admin', 'gerente', 'vendedor'] },
 ];
 
