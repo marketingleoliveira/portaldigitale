@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import RoleBadge from '@/components/RoleBadge';
 import { useToast } from '@/hooks/use-toast';
-import { User, Lock, Mail, Phone, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { User, Lock, Mail, Phone, Loader2, Pencil, Check, X } from 'lucide-react';
 import { z } from 'zod';
 
 const passwordSchema = z.object({
@@ -18,12 +19,19 @@ const passwordSchema = z.object({
   path: ['confirmPassword'],
 });
 
+const nameSchema = z.string().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100, 'Nome muito longo');
+
 const Profile: React.FC = () => {
   const { user, updatePassword } = useAuth();
   const { toast } = useToast();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
+  
+  // Name editing state
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(user?.profile?.full_name || '');
+  const [savingName, setSavingName] = useState(false);
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +71,51 @@ const Profile: React.FC = () => {
     }
   };
 
+  const handleUpdateName = async () => {
+    const validation = nameSchema.safeParse(editedName.trim());
+    if (!validation.success) {
+      toast({
+        title: 'Erro',
+        description: validation.error.errors[0].message,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSavingName(true);
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ full_name: editedName.trim() })
+        .eq('id', user?.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso',
+        description: 'Nome atualizado com sucesso',
+      });
+
+      setIsEditingName(false);
+      // Reload to reflect changes
+      window.location.reload();
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao atualizar nome',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const cancelNameEdit = () => {
+    setEditedName(user?.profile?.full_name || '');
+    setIsEditingName(false);
+  };
+
   return (
     <DashboardLayout>
       <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
@@ -83,10 +136,56 @@ const Profile: React.FC = () => {
           <CardContent className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-full gradient-primary flex items-center justify-center text-primary-foreground text-xl font-bold">
-                {user?.profile?.full_name?.charAt(0) || 'U'}
+                {(isEditingName ? editedName : user?.profile?.full_name)?.charAt(0) || 'U'}
               </div>
-              <div>
-                <p className="text-lg font-semibold">{user?.profile?.full_name || 'Usuário'}</p>
+              <div className="flex-1">
+                {isEditingName ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={editedName}
+                      onChange={(e) => setEditedName(e.target.value)}
+                      className="max-w-xs"
+                      placeholder="Seu nome"
+                      maxLength={100}
+                      disabled={savingName}
+                    />
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      onClick={handleUpdateName}
+                      disabled={savingName}
+                    >
+                      {savingName ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Check className="w-4 h-4 text-green-600" />
+                      )}
+                    </Button>
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      onClick={cancelNameEdit}
+                      disabled={savingName}
+                    >
+                      <X className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <p className="text-lg font-semibold">{user?.profile?.full_name || 'Usuário'}</p>
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      className="h-8 w-8"
+                      onClick={() => {
+                        setEditedName(user?.profile?.full_name || '');
+                        setIsEditingName(true);
+                      }}
+                    >
+                      <Pencil className="w-4 h-4 text-muted-foreground" />
+                    </Button>
+                  </div>
+                )}
                 {user?.role && <RoleBadge role={user.role} />}
               </div>
             </div>

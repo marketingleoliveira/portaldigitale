@@ -27,11 +27,17 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
 
   if (!user.profile?.is_active) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-2">Conta Desativada</h1>
-          <p className="text-muted-foreground">
-            Sua conta foi desativada. Entre em contato com o administrador.
+      <div className="min-h-screen flex items-center justify-center bg-background p-6">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-amber-600" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">Aguardando Aprovação</h1>
+          <p className="text-muted-foreground mb-4">
+            Seu cadastro está sendo analisado por um administrador. Você receberá acesso ao portal assim que for aprovado.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Em caso de dúvidas, entre em contato com o administrador do sistema.
           </p>
         </div>
       </div>
