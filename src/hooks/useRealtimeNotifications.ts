@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 interface NewNotification {
   id: string;
-  type: 'notification' | 'user_notification' | 'ticket_message';
+  type: 'notification' | 'user_notification' | 'ticket_message' | 'new_ticket';
   title: string;
   message: string;
   createdAt: string;
@@ -333,6 +333,42 @@ export const useRealtimeNotifications = () => {
       )
       .subscribe();
 
+    // Subscribe to new tickets (for admins)
+    const newTicketsChannel = supabase
+      .channel('new-tickets-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'tickets',
+        },
+        async (payload) => {
+          const newTicket = payload.new as any;
+          
+          // Only admins should receive new ticket alerts
+          if (user.role === 'admin' && newTicket.user_id !== user.id) {
+            // Get the user name who created the ticket
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', newTicket.user_id)
+              .single();
+            
+            addNewAlert({
+              id: `ticket-${newTicket.id}`,
+              type: 'new_ticket',
+              title: 'Novo chamado aberto',
+              message: `${profile?.full_name || 'Usuário'}: ${newTicket.title}`,
+              createdAt: newTicket.created_at,
+              ticketId: newTicket.id,
+            });
+            fetchUnreadCount();
+          }
+        }
+      )
+      .subscribe();
+
     // Subscribe to ticket status changes to remove alerts when resolved
     const ticketStatusChannel = supabase
       .channel('ticket-status-changes')
@@ -358,6 +394,7 @@ export const useRealtimeNotifications = () => {
       supabase.removeChannel(notificationsChannel);
       supabase.removeChannel(userNotificationsChannel);
       supabase.removeChannel(ticketMessagesChannel);
+      supabase.removeChannel(newTicketsChannel);
       supabase.removeChannel(ticketStatusChannel);
     };
   }, [user?.id, user?.role, addNewAlert, fetchUnreadCount, removeTicketAlerts]);
