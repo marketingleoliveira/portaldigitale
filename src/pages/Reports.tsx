@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
-import { AccessLog } from '@/types/auth';
+import { AccessLog, AppRole } from '@/types/auth';
 import {
   Table,
   TableBody,
@@ -12,12 +12,47 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { BarChart3, Users, Activity, TrendingUp, Loader2 } from 'lucide-react';
+import { 
+  BarChart3, Users, Activity, TrendingUp, Loader2, 
+  User, Download, LogIn, FileText, ChevronLeft, Calendar,
+  Clock
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import RoleBadge from '@/components/RoleBadge';
+import { Input } from '@/components/ui/input';
+import { Search } from 'lucide-react';
+
+interface UserProfile {
+  id: string;
+  full_name: string;
+  email: string;
+  avatar_url: string | null;
+  is_active: boolean;
+  role?: AppRole;
+  last_login?: string;
+  total_logins: number;
+  total_downloads: number;
+}
+
+interface UserActivity {
+  id: string;
+  action: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  created_at: string;
+  resource_name?: string;
+}
 
 const Reports: React.FC = () => {
   const { user } = useAuth();
-  const [logs, setLogs] = useState<AccessLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [userActivities, setUserActivities] = useState<UserActivity[]>([]);
+  const [loadingActivities, setLoadingActivities] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [stats, setStats] = useState({
     totalLogins: 0,
     uniqueUsers: 0,
@@ -26,29 +61,80 @@ const Reports: React.FC = () => {
 
   useEffect(() => {
     if (user?.role === 'admin' || user?.role === 'gerente') {
-      fetchLogs();
+      fetchUsers();
+      fetchOverallStats();
     }
   }, [user]);
 
-  const fetchLogs = async () => {
+  const fetchUsers = async () => {
+    try {
+      // Fetch all profiles with their roles
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('full_name');
+
+      if (profilesError) throw profilesError;
+
+      // Fetch roles for all users
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+
+      if (rolesError) throw rolesError;
+
+      // Fetch access logs for stats
+      const { data: logs, error: logsError } = await supabase
+        .from('access_logs')
+        .select('user_id, action, created_at');
+
+      if (logsError) throw logsError;
+
+      // Map users with their stats
+      const usersWithStats = (profiles || []).map((profile) => {
+        const userRole = roles?.find((r) => r.user_id === profile.id);
+        const userLogs = logs?.filter((l) => l.user_id === profile.id) || [];
+        const loginLogs = userLogs.filter((l) => l.action === 'login');
+        const downloadLogs = userLogs.filter((l) => l.action === 'download');
+        const lastLogin = loginLogs.length > 0 
+          ? loginLogs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]?.created_at
+          : null;
+
+        return {
+          id: profile.id,
+          full_name: profile.full_name,
+          email: profile.email,
+          avatar_url: profile.avatar_url,
+          is_active: profile.is_active,
+          role: userRole?.role as AppRole | undefined,
+          last_login: lastLogin || undefined,
+          total_logins: loginLogs.length,
+          total_downloads: downloadLogs.length,
+        };
+      });
+
+      setUsers(usersWithStats);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchOverallStats = async () => {
     try {
       const { data, error } = await supabase
         .from('access_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .select('user_id, action, created_at')
+        .eq('action', 'login');
 
       if (error) throw error;
 
       const logsData = data || [];
-      setLogs(logsData);
-
-      // Calculate stats
       const today = new Date().toDateString();
       const todayLogins = logsData.filter(
         (log) => new Date(log.created_at).toDateString() === today
       ).length;
-
       const uniqueUsers = new Set(logsData.map((log) => log.user_id)).size;
 
       setStats({
@@ -57,20 +143,117 @@ const Reports: React.FC = () => {
         todayLogins,
       });
     } catch (error) {
-      console.error('Error fetching logs:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching stats:', error);
     }
+  };
+
+  const fetchUserActivities = async (userId: string) => {
+    setLoadingActivities(true);
+    try {
+      const { data: logs, error } = await supabase
+        .from('access_logs')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+
+      // Enhance logs with resource names
+      const enhancedLogs = await Promise.all(
+        (logs || []).map(async (log) => {
+          let resourceName = '';
+          
+          if (log.resource_type === 'file' && log.resource_id) {
+            const { data: file } = await supabase
+              .from('files')
+              .select('name')
+              .eq('id', log.resource_id)
+              .maybeSingle();
+            resourceName = file?.name || 'Arquivo removido';
+          } else if (log.resource_type === 'product' && log.resource_id) {
+            const { data: product } = await supabase
+              .from('products')
+              .select('name')
+              .eq('id', log.resource_id)
+              .maybeSingle();
+            resourceName = product?.name || 'Produto removido';
+          }
+
+          return {
+            ...log,
+            resource_name: resourceName,
+          };
+        })
+      );
+
+      setUserActivities(enhancedLogs);
+    } catch (error) {
+      console.error('Error fetching user activities:', error);
+    } finally {
+      setLoadingActivities(false);
+    }
+  };
+
+  const handleSelectUser = (userProfile: UserProfile) => {
+    setSelectedUser(userProfile);
+    fetchUserActivities(userProfile.id);
   };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: 'short',
+      year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     });
   };
+
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Agora';
+    if (diffMins < 60) return `${diffMins} min atrás`;
+    if (diffHours < 24) return `${diffHours}h atrás`;
+    if (diffDays < 7) return `${diffDays} dias atrás`;
+    return formatDate(dateString);
+  };
+
+  const getActionIcon = (action: string) => {
+    switch (action) {
+      case 'login':
+        return <LogIn className="w-4 h-4 text-success" />;
+      case 'download':
+        return <Download className="w-4 h-4 text-primary" />;
+      default:
+        return <Activity className="w-4 h-4 text-muted-foreground" />;
+    }
+  };
+
+  const getActionLabel = (action: string) => {
+    switch (action) {
+      case 'login':
+        return 'Login';
+      case 'download':
+        return 'Download';
+      case 'view':
+        return 'Visualização';
+      default:
+        return action;
+    }
+  };
+
+  const filteredUsers = users.filter(
+    (u) =>
+      u.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   if (user?.role !== 'admin' && user?.role !== 'gerente') {
     return (
@@ -86,6 +269,164 @@ const Reports: React.FC = () => {
     );
   }
 
+  // User Detail View
+  if (selectedUser) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 animate-fade-in">
+          {/* Header with back button */}
+          <div className="flex items-center gap-4">
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => {
+                setSelectedUser(null);
+                setUserActivities([]);
+              }}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <div className="flex items-center gap-4 flex-1">
+              <Avatar className="w-16 h-16">
+                <AvatarImage src={selectedUser.avatar_url || undefined} />
+                <AvatarFallback className="text-lg">
+                  {selectedUser.full_name.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <h1 className="text-2xl font-bold">{selectedUser.full_name}</h1>
+                <p className="text-muted-foreground">{selectedUser.email}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  {selectedUser.role && <RoleBadge role={selectedUser.role} size="sm" />}
+                  <Badge variant={selectedUser.is_active ? 'default' : 'secondary'}>
+                    {selectedUser.is_active ? 'Ativo' : 'Inativo'}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* User Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Total de Logins</p>
+                    <p className="text-3xl font-bold mt-1">{selectedUser.total_logins}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-success/10">
+                    <LogIn className="w-6 h-6 text-success" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Downloads</p>
+                    <p className="text-3xl font-bold mt-1">{selectedUser.total_downloads}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-primary/10">
+                    <Download className="w-6 h-6 text-primary" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Último Login</p>
+                    <p className="text-lg font-bold mt-1">
+                      {selectedUser.last_login 
+                        ? formatRelativeTime(selectedUser.last_login)
+                        : 'Nunca'}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-warning/10">
+                    <Clock className="w-6 h-6 text-warning" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Activity History */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="w-5 h-5 text-primary" />
+                Histórico de Atividades
+              </CardTitle>
+              <CardDescription>
+                Últimas 100 atividades do usuário
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingActivities ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data/Hora</TableHead>
+                      <TableHead>Ação</TableHead>
+                      <TableHead>Recurso</TableHead>
+                      <TableHead>Detalhes</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {userActivities.map((activity) => (
+                      <TableRow key={activity.id}>
+                        <TableCell className="text-muted-foreground whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4" />
+                            {formatDate(activity.created_at)}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getActionIcon(activity.action)}
+                            <span className="font-medium">
+                              {getActionLabel(activity.action)}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {activity.resource_type || 'Sistema'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate">
+                          {activity.resource_name || '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {userActivities.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-12">
+                          <Activity className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                          <p className="text-muted-foreground">
+                            Nenhuma atividade registrada para este usuário
+                          </p>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Users List View
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
@@ -101,7 +442,7 @@ const Reports: React.FC = () => {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total de Acessos</p>
+                  <p className="text-sm font-medium text-muted-foreground">Total de Logins</p>
                   <p className="text-3xl font-bold mt-1">{loading ? '-' : stats.totalLogins}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-primary/10">
@@ -114,7 +455,7 @@ const Reports: React.FC = () => {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Usuários Únicos</p>
+                  <p className="text-sm font-medium text-muted-foreground">Usuários Ativos</p>
                   <p className="text-3xl font-bold mt-1">{loading ? '-' : stats.uniqueUsers}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-success/10">
@@ -127,7 +468,7 @@ const Reports: React.FC = () => {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Acessos Hoje</p>
+                  <p className="text-sm font-medium text-muted-foreground">Logins Hoje</p>
                   <p className="text-3xl font-bold mt-1">{loading ? '-' : stats.todayLogins}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-warning/10">
@@ -138,14 +479,25 @@ const Reports: React.FC = () => {
           </Card>
         </div>
 
-        {/* Recent Activity */}
+        {/* Users List */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-primary" />
-              Atividade Recente
+              <Users className="w-5 h-5 text-primary" />
+              Usuários
             </CardTitle>
-            <CardDescription>Últimos 50 registros de acesso</CardDescription>
+            <CardDescription>
+              Selecione um usuário para ver o relatório completo de atividades
+            </CardDescription>
+            <div className="relative mt-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar usuários..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             {loading ? (
@@ -156,25 +508,66 @@ const Reports: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Ação</TableHead>
-                    <TableHead>Recurso</TableHead>
+                    <TableHead>Usuário</TableHead>
+                    <TableHead>Cargo</TableHead>
+                    <TableHead>Último Login</TableHead>
+                    <TableHead className="text-center">Logins</TableHead>
+                    <TableHead className="text-center">Downloads</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {logs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="text-muted-foreground">
-                        {formatDate(log.created_at)}
+                  {filteredUsers.map((userProfile) => (
+                    <TableRow 
+                      key={userProfile.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSelectUser(userProfile)}
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage src={userProfile.avatar_url || undefined} />
+                            <AvatarFallback>
+                              {userProfile.full_name.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{userProfile.full_name}</p>
+                            <p className="text-sm text-muted-foreground">{userProfile.email}</p>
+                          </div>
+                        </div>
                       </TableCell>
-                      <TableCell className="font-medium capitalize">{log.action}</TableCell>
-                      <TableCell>{log.resource_type || '-'}</TableCell>
+                      <TableCell>
+                        {userProfile.role ? (
+                          <RoleBadge role={userProfile.role} size="sm" />
+                        ) : (
+                          <Badge variant="outline">Sem cargo</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {userProfile.last_login 
+                          ? formatRelativeTime(userProfile.last_login)
+                          : 'Nunca'}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary">{userProfile.total_logins}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="secondary">{userProfile.total_downloads}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm">
+                          <FileText className="w-4 h-4 mr-1" />
+                          Ver Relatório
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
-                  {logs.length === 0 && (
+                  {filteredUsers.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center py-8">
-                        <p className="text-muted-foreground">Nenhum registro encontrado</p>
+                      <TableCell colSpan={6} className="text-center py-12">
+                        <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                        <p className="text-muted-foreground">Nenhum usuário encontrado</p>
                       </TableCell>
                     </TableRow>
                   )}
