@@ -1,17 +1,41 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { Package, Users, FolderOpen, Activity, TrendingUp, Eye } from 'lucide-react';
+import { 
+  Package, 
+  Users, 
+  FolderOpen, 
+  Activity, 
+  TrendingUp, 
+  FileText, 
+  Bell,
+  HelpCircle,
+  TicketIcon,
+  ArrowRight,
+  Clock
+} from 'lucide-react';
 import RoleBadge from '@/components/RoleBadge';
+import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface DashboardStats {
   totalProducts: number;
   totalUsers: number;
   totalCategories: number;
   recentLogs: number;
+  totalFiles: number;
+  unreadNotifications: number;
+  openTickets: number;
+}
+
+interface RecentActivity {
+  type: 'product' | 'notification' | 'file';
+  title: string;
+  date: string;
 }
 
 const Dashboard: React.FC = () => {
@@ -21,7 +45,11 @@ const Dashboard: React.FC = () => {
     totalUsers: 0,
     totalCategories: 0,
     recentLogs: 0,
+    totalFiles: 0,
+    unreadNotifications: 0,
+    openTickets: 0,
   });
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,6 +64,17 @@ const Dashboard: React.FC = () => {
         const { count: categoriesCount } = await supabase
           .from('categories')
           .select('*', { count: 'exact', head: true });
+
+        // Fetch files count
+        const { count: filesCount } = await supabase
+          .from('files')
+          .select('*', { count: 'exact', head: true });
+
+        // Fetch open tickets for the user
+        const { count: ticketsCount } = await supabase
+          .from('tickets')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'aberto');
 
         // Admin-only stats
         let usersCount = 0;
@@ -53,11 +92,29 @@ const Dashboard: React.FC = () => {
           logsCount = logs || 0;
         }
 
+        // Fetch recent activities
+        const { data: recentProducts } = await supabase
+          .from('products')
+          .select('name, created_at')
+          .order('created_at', { ascending: false })
+          .limit(3);
+
+        const activities: RecentActivity[] = (recentProducts || []).map(p => ({
+          type: 'product' as const,
+          title: p.name,
+          date: p.created_at,
+        }));
+
+        setRecentActivities(activities);
+
         setStats({
           totalProducts: productsCount || 0,
           totalUsers: usersCount,
           totalCategories: categoriesCount || 0,
           recentLogs: logsCount,
+          totalFiles: filesCount || 0,
+          unreadNotifications: 0,
+          openTickets: ticketsCount || 0,
         });
       } catch (error) {
         console.error('Error fetching stats:', error);
@@ -81,18 +138,30 @@ const Dashboard: React.FC = () => {
       title: 'Produtos',
       value: stats.totalProducts,
       icon: Package,
-      description: 'Total cadastrados',
+      description: 'Total no catálogo',
       color: 'text-primary',
       bgColor: 'bg-primary/10',
+      href: '/produtos',
       roles: ['admin', 'gerente', 'vendedor'],
     },
     {
       title: 'Categorias',
       value: stats.totalCategories,
       icon: FolderOpen,
-      description: 'Disponíveis',
+      description: 'Organizando produtos',
       color: 'text-success',
       bgColor: 'bg-success/10',
+      href: '/categorias',
+      roles: ['admin', 'gerente', 'vendedor'],
+    },
+    {
+      title: 'Arquivos',
+      value: stats.totalFiles,
+      icon: FileText,
+      description: 'Materiais disponíveis',
+      color: 'text-role-gerente',
+      bgColor: 'bg-role-gerente/10',
+      href: '/downloads',
       roles: ['admin', 'gerente', 'vendedor'],
     },
     {
@@ -100,8 +169,9 @@ const Dashboard: React.FC = () => {
       value: stats.totalUsers,
       icon: Users,
       description: 'Ativos no sistema',
-      color: 'text-role-gerente',
-      bgColor: 'bg-role-gerente/10',
+      color: 'text-warning',
+      bgColor: 'bg-warning/10',
+      href: '/usuarios',
       roles: ['admin'],
     },
     {
@@ -111,12 +181,65 @@ const Dashboard: React.FC = () => {
       description: 'Logs registrados',
       color: 'text-role-admin',
       bgColor: 'bg-role-admin/10',
+      href: '/relatorios',
       roles: ['admin'],
     },
   ];
 
   const filteredStats = statsCards.filter(card => 
     user?.role && card.roles.includes(user.role)
+  );
+
+  const quickActions = [
+    {
+      title: 'Ver Catálogo',
+      description: 'Acesse todos os produtos',
+      icon: Package,
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
+      href: '/produtos',
+      roles: ['admin', 'gerente', 'vendedor'],
+    },
+    {
+      title: 'Materiais Comerciais',
+      description: 'Fichas técnicas e catálogos',
+      icon: FileText,
+      color: 'text-success',
+      bgColor: 'bg-success/10',
+      href: '/downloads',
+      roles: ['admin', 'gerente', 'vendedor'],
+    },
+    {
+      title: 'Notificações',
+      description: 'Veja os avisos recentes',
+      icon: Bell,
+      color: 'text-warning',
+      bgColor: 'bg-warning/10',
+      href: '/notificacoes',
+      roles: ['admin', 'gerente', 'vendedor'],
+    },
+    {
+      title: 'Central de Ajuda',
+      description: 'Guias e suporte',
+      icon: HelpCircle,
+      color: 'text-role-gerente',
+      bgColor: 'bg-role-gerente/10',
+      href: '/ajuda',
+      roles: ['admin', 'gerente', 'vendedor'],
+    },
+    {
+      title: 'Gerenciar Usuários',
+      description: 'Cadastro e permissões',
+      icon: Users,
+      color: 'text-role-admin',
+      bgColor: 'bg-role-admin/10',
+      href: '/usuarios',
+      roles: ['admin'],
+    },
+  ];
+
+  const filteredActions = quickActions.filter(action => 
+    user?.role && action.roles.includes(user.role)
   );
 
   return (
@@ -138,38 +261,40 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {filteredStats.map((stat) => {
             const Icon = stat.icon;
             return (
-              <Card key={stat.title} className="hover:shadow-md transition-shadow">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">
-                        {stat.title}
-                      </p>
-                      <p className="text-3xl font-bold mt-1">
-                        {loading ? '-' : stat.value}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {stat.description}
-                      </p>
+              <Link key={stat.title} to={stat.href}>
+                <Card className="hover:shadow-md transition-all hover:border-primary/50 cursor-pointer h-full">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          {stat.title}
+                        </p>
+                        <p className="text-3xl font-bold mt-1">
+                          {loading ? '-' : stat.value}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {stat.description}
+                        </p>
+                      </div>
+                      <div className={`p-3 rounded-lg ${stat.bgColor}`}>
+                        <Icon className={`w-6 h-6 ${stat.color}`} />
+                      </div>
                     </div>
-                    <div className={`p-3 rounded-lg ${stat.bgColor}`}>
-                      <Icon className={`w-6 h-6 ${stat.color}`} />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </Link>
             );
           })}
         </div>
 
-        {/* Role-specific Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Quick Actions */}
-          <Card>
+          <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-primary" />
@@ -179,33 +304,98 @@ const Dashboard: React.FC = () => {
                 Acesse rapidamente as principais funcionalidades
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <a href="/produtos" className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                <Package className="w-5 h-5 text-primary" />
-                <div>
-                  <p className="font-medium">Ver Produtos</p>
-                  <p className="text-sm text-muted-foreground">Acesse o catálogo completo</p>
-                </div>
-              </a>
-              <a href="/downloads" className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                <Eye className="w-5 h-5 text-success" />
-                <div>
-                  <p className="font-medium">Downloads</p>
-                  <p className="text-sm text-muted-foreground">Materiais e fichas técnicas</p>
-                </div>
-              </a>
-              {user?.role === 'admin' && (
-                <a href="/usuarios" className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                  <Users className="w-5 h-5 text-role-admin" />
-                  <div>
-                    <p className="font-medium">Gerenciar Usuários</p>
-                    <p className="text-sm text-muted-foreground">Cadastro e permissões</p>
-                  </div>
-                </a>
-              )}
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {filteredActions.map((action) => {
+                const Icon = action.icon;
+                return (
+                  <Link 
+                    key={action.href} 
+                    to={action.href}
+                    className="flex items-center gap-3 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors group"
+                  >
+                    <div className={`p-2 rounded-lg ${action.bgColor}`}>
+                      <Icon className={`w-5 h-5 ${action.color}`} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium">{action.title}</p>
+                      <p className="text-sm text-muted-foreground">{action.description}</p>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </Link>
+                );
+              })}
             </CardContent>
           </Card>
 
+          {/* Support & Tickets */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TicketIcon className="w-5 h-5 text-primary" />
+                Suporte
+              </CardTitle>
+              <CardDescription>
+                Precisa de ajuda?
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Link 
+                to="/tickets" 
+                className="flex items-center justify-between p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <TicketIcon className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Meus Chamados</p>
+                    {stats.openTickets > 0 && (
+                      <Badge variant="secondary" className="mt-1">
+                        {stats.openTickets} aberto{stats.openTickets > 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-muted-foreground" />
+              </Link>
+
+              <Link 
+                to="/tickets/novo" 
+                className="flex items-center justify-between p-4 rounded-lg border-2 border-dashed border-muted-foreground/20 hover:border-primary/50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-success/10">
+                    <HelpCircle className="w-5 h-5 text-success" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Abrir Chamado</p>
+                    <p className="text-xs text-muted-foreground">Reportar erro ou solicitar ajuda</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-muted-foreground" />
+              </Link>
+
+              <Link 
+                to="/ajuda" 
+                className="flex items-center justify-between p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-role-gerente/10">
+                    <HelpCircle className="w-5 h-5 text-role-gerente" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Central de Ajuda</p>
+                    <p className="text-xs text-muted-foreground">Guias e tutoriais</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-muted-foreground" />
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Role Info & Recent Activity */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Role Info */}
           <Card>
             <CardHeader>
@@ -249,6 +439,40 @@ const Dashboard: React.FC = () => {
                       </>
                     )}
                   </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent Products */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-primary" />
+                Produtos Recentes
+              </CardTitle>
+              <CardDescription>
+                Últimos produtos adicionados
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {recentActivities.length === 0 ? (
+                <p className="text-muted-foreground text-sm">Nenhum produto recente</p>
+              ) : (
+                <div className="space-y-3">
+                  {recentActivities.map((activity, index) => (
+                    <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <Package className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{activity.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {activity.date && format(new Date(activity.date), "dd/MM/yyyy", { locale: ptBR })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>
