@@ -10,7 +10,7 @@ interface NotificationContextType {
   };
   newAlerts: Array<{
     id: string;
-    type: 'notification' | 'user_notification' | 'ticket_message';
+    type: 'notification' | 'user_notification' | 'ticket_message' | 'new_ticket';
     title: string;
     message: string;
     createdAt: string;

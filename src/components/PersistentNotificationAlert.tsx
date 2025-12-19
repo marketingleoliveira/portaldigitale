@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 
 interface NewNotification {
   id: string;
-  type: 'notification' | 'user_notification' | 'ticket_message';
+  type: 'notification' | 'user_notification' | 'ticket_message' | 'new_ticket';
   title: string;
   message: string;
   createdAt: string;
@@ -39,7 +39,7 @@ const PersistentNotificationAlert: React.FC<PersistentNotificationAlertProps> = 
   const currentAlert = alerts[currentAlertIndex % alerts.length];
 
   const handleAction = () => {
-    if (currentAlert.type === 'ticket_message' && currentAlert.ticketId) {
+    if ((currentAlert.type === 'ticket_message' || currentAlert.type === 'new_ticket') && currentAlert.ticketId) {
       navigate(`/tickets/${currentAlert.ticketId}`);
     } else {
       navigate('/notificacoes');
@@ -63,6 +63,7 @@ const PersistentNotificationAlert: React.FC<PersistentNotificationAlertProps> = 
   const getIcon = () => {
     switch (currentAlert.type) {
       case 'ticket_message':
+      case 'new_ticket':
         return <TicketIcon className="w-8 h-8" />;
       case 'user_notification':
         return <MessageCircle className="w-8 h-8" />;
@@ -75,6 +76,8 @@ const PersistentNotificationAlert: React.FC<PersistentNotificationAlertProps> = 
     switch (currentAlert.type) {
       case 'ticket_message':
         return 'Ver Ticket';
+      case 'new_ticket':
+        return 'Ver Chamado';
       default:
         return 'Ver Notificação';
     }
