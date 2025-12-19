@@ -9,7 +9,17 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { Product, Category, AppRole } from '@/types/auth';
 import RoleBadge from '@/components/RoleBadge';
-import { Search, Package, FileText, Download, Plus, Filter, Eye } from 'lucide-react';
+import { Search, Package, FileText, Download, Plus, Filter, Eye, Pencil, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -37,6 +47,146 @@ interface ProductWithDetails extends Product {
   visibility: AppRole[];
 }
 
+interface ProductFormData {
+  name: string;
+  description: string;
+  price: string;
+  commercial_conditions: string;
+  image_url: string;
+  catalog_url: string;
+  technical_sheet_url: string;
+  category_id: string;
+  visibility: AppRole[];
+}
+
+interface ProductFormProps {
+  formProduct: ProductFormData;
+  setFormProduct: React.Dispatch<React.SetStateAction<ProductFormData>>;
+  categories: Category[];
+  idPrefix?: string;
+}
+
+const ProductForm: React.FC<ProductFormProps> = ({ formProduct, setFormProduct, categories, idPrefix = '' }) => (
+  <div className="grid gap-4 py-4">
+    <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}name`}>Nome *</Label>
+        <Input
+          id={`${idPrefix}name`}
+          value={formProduct.name}
+          onChange={(e) => setFormProduct({ ...formProduct, name: e.target.value })}
+          placeholder="Nome do produto"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}price`}>Preço</Label>
+        <Input
+          id={`${idPrefix}price`}
+          type="number"
+          step="0.01"
+          value={formProduct.price}
+          onChange={(e) => setFormProduct({ ...formProduct, price: e.target.value })}
+          placeholder="0.00"
+        />
+      </div>
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor={`${idPrefix}description`}>Descrição</Label>
+      <Textarea
+        id={`${idPrefix}description`}
+        value={formProduct.description}
+        onChange={(e) => setFormProduct({ ...formProduct, description: e.target.value })}
+        placeholder="Descrição do produto"
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor={`${idPrefix}category`}>Categoria</Label>
+      <Select
+        value={formProduct.category_id}
+        onValueChange={(value) => setFormProduct({ ...formProduct, category_id: value })}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Selecione uma categoria" />
+        </SelectTrigger>
+        <SelectContent className="bg-popover">
+          {categories.map((cat) => (
+            <SelectItem key={cat.id} value={cat.id}>
+              {cat.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor={`${idPrefix}commercial`}>Condições Comerciais</Label>
+      <Textarea
+        id={`${idPrefix}commercial`}
+        value={formProduct.commercial_conditions}
+        onChange={(e) => setFormProduct({ ...formProduct, commercial_conditions: e.target.value })}
+        placeholder="Condições comerciais e observações"
+      />
+    </div>
+    <div className="grid grid-cols-3 gap-4">
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}image_url`}>URL da Imagem</Label>
+        <Input
+          id={`${idPrefix}image_url`}
+          value={formProduct.image_url}
+          onChange={(e) => setFormProduct({ ...formProduct, image_url: e.target.value })}
+          placeholder="https://..."
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}catalog_url`}>URL do Catálogo</Label>
+        <Input
+          id={`${idPrefix}catalog_url`}
+          value={formProduct.catalog_url}
+          onChange={(e) => setFormProduct({ ...formProduct, catalog_url: e.target.value })}
+          placeholder="https://..."
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}technical_sheet_url`}>Ficha Técnica</Label>
+        <Input
+          id={`${idPrefix}technical_sheet_url`}
+          value={formProduct.technical_sheet_url}
+          onChange={(e) => setFormProduct({ ...formProduct, technical_sheet_url: e.target.value })}
+          placeholder="https://..."
+        />
+      </div>
+    </div>
+    <div className="space-y-2">
+      <Label>Visibilidade por Cargo</Label>
+      <div className="flex flex-wrap gap-4 pt-2">
+        {(['vendedor', 'gerente', 'admin'] as AppRole[]).map((role) => (
+          <div key={role} className="flex items-center space-x-2">
+            <Checkbox
+              id={`${idPrefix}visibility-${role}`}
+              checked={formProduct.visibility.includes(role)}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  setFormProduct({
+                    ...formProduct,
+                    visibility: [...formProduct.visibility, role],
+                  });
+                } else {
+                  setFormProduct({
+                    ...formProduct,
+                    visibility: formProduct.visibility.filter((r) => r !== role),
+                  });
+                }
+              }}
+            />
+            <Label htmlFor={`${idPrefix}visibility-${role}`} className="cursor-pointer">
+              <RoleBadge role={role} size="sm" />
+            </Label>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
 const Products: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -49,8 +199,17 @@ const Products: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Form state for new product
-  const [newProduct, setNewProduct] = useState({
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductWithDetails | null>(null);
+  
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingProduct, setDeletingProduct] = useState<ProductWithDetails | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Form state for new/edit product
+  const [formProduct, setFormProduct] = useState({
     name: '',
     description: '',
     price: '',
@@ -61,6 +220,22 @@ const Products: React.FC = () => {
     category_id: '',
     visibility: ['vendedor', 'gerente', 'admin'] as AppRole[],
   });
+
+  const canManageProducts = user?.role === 'admin' || user?.role === 'gerente';
+
+  const resetForm = () => {
+    setFormProduct({
+      name: '',
+      description: '',
+      price: '',
+      commercial_conditions: '',
+      image_url: '',
+      catalog_url: '',
+      technical_sheet_url: '',
+      category_id: '',
+      visibility: ['vendedor', 'gerente', 'admin'],
+    });
+  };
 
   useEffect(() => {
     fetchProducts();
@@ -111,7 +286,7 @@ const Products: React.FC = () => {
   };
 
   const handleCreateProduct = async () => {
-    if (!newProduct.name.trim()) {
+    if (!formProduct.name.trim()) {
       toast({
         title: 'Erro',
         description: 'Nome do produto é obrigatório',
@@ -123,18 +298,17 @@ const Products: React.FC = () => {
     setSaving(true);
 
     try {
-      // Create product
       const { data: productData, error: productError } = await supabase
         .from('products')
         .insert({
-          name: newProduct.name,
-          description: newProduct.description || null,
-          price: newProduct.price ? parseFloat(newProduct.price) : null,
-          commercial_conditions: newProduct.commercial_conditions || null,
-          image_url: newProduct.image_url || null,
-          catalog_url: newProduct.catalog_url || null,
-          technical_sheet_url: newProduct.technical_sheet_url || null,
-          category_id: newProduct.category_id || null,
+          name: formProduct.name,
+          description: formProduct.description || null,
+          price: formProduct.price ? parseFloat(formProduct.price) : null,
+          commercial_conditions: formProduct.commercial_conditions || null,
+          image_url: formProduct.image_url || null,
+          catalog_url: formProduct.catalog_url || null,
+          technical_sheet_url: formProduct.technical_sheet_url || null,
+          category_id: formProduct.category_id || null,
           created_by: user?.id,
         })
         .select()
@@ -142,13 +316,11 @@ const Products: React.FC = () => {
 
       if (productError) throw productError;
 
-      // Create visibility entries
-      if (productData && newProduct.visibility.length > 0) {
-        const visibilityEntries = newProduct.visibility.map((role) => ({
+      if (productData && formProduct.visibility.length > 0) {
+        const visibilityEntries = formProduct.visibility.map((role) => ({
           product_id: productData.id,
           visible_to_role: role,
         }));
-
         await supabase.from('product_visibility').insert(visibilityEntries);
       }
 
@@ -158,17 +330,7 @@ const Products: React.FC = () => {
       });
 
       setDialogOpen(false);
-      setNewProduct({
-        name: '',
-        description: '',
-        price: '',
-        commercial_conditions: '',
-        image_url: '',
-        catalog_url: '',
-        technical_sheet_url: '',
-        category_id: '',
-        visibility: ['vendedor', 'gerente', 'admin'],
-      });
+      resetForm();
       fetchProducts();
     } catch (error) {
       console.error('Error creating product:', error);
@@ -179,6 +341,126 @@ const Products: React.FC = () => {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEditProduct = (product: ProductWithDetails) => {
+    setEditingProduct(product);
+    setFormProduct({
+      name: product.name,
+      description: product.description || '',
+      price: product.price?.toString() || '',
+      commercial_conditions: product.commercial_conditions || '',
+      image_url: product.image_url || '',
+      catalog_url: product.catalog_url || '',
+      technical_sheet_url: product.technical_sheet_url || '',
+      category_id: product.category_id || '',
+      visibility: product.visibility,
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdateProduct = async () => {
+    if (!formProduct.name.trim() || !editingProduct) {
+      toast({
+        title: 'Erro',
+        description: 'Nome do produto é obrigatório',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({
+          name: formProduct.name,
+          description: formProduct.description || null,
+          price: formProduct.price ? parseFloat(formProduct.price) : null,
+          commercial_conditions: formProduct.commercial_conditions || null,
+          image_url: formProduct.image_url || null,
+          catalog_url: formProduct.catalog_url || null,
+          technical_sheet_url: formProduct.technical_sheet_url || null,
+          category_id: formProduct.category_id || null,
+        })
+        .eq('id', editingProduct.id);
+
+      if (updateError) throw updateError;
+
+      // Update visibility - delete existing and insert new
+      await supabase
+        .from('product_visibility')
+        .delete()
+        .eq('product_id', editingProduct.id);
+
+      if (formProduct.visibility.length > 0) {
+        const visibilityEntries = formProduct.visibility.map((role) => ({
+          product_id: editingProduct.id,
+          visible_to_role: role,
+        }));
+        await supabase.from('product_visibility').insert(visibilityEntries);
+      }
+
+      toast({
+        title: 'Sucesso',
+        description: 'Produto atualizado com sucesso',
+      });
+
+      setEditDialogOpen(false);
+      setEditingProduct(null);
+      resetForm();
+      fetchProducts();
+    } catch (error) {
+      console.error('Error updating product:', error);
+      toast({
+        title: 'Erro',
+        description: 'Erro ao atualizar produto',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteProduct = async () => {
+    if (!deletingProduct) return;
+
+    setDeleting(true);
+
+    try {
+      // Delete visibility entries first
+      await supabase
+        .from('product_visibility')
+        .delete()
+        .eq('product_id', deletingProduct.id);
+
+      // Delete product
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', deletingProduct.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sucesso',
+        description: 'Produto excluído com sucesso',
+      });
+
+      setDeleteDialogOpen(false);
+      setDeletingProduct(null);
+      fetchProducts();
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      toast({
+        title: 'Erro',
+        description: 'Erro ao excluir produto',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -205,13 +487,16 @@ const Products: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold">Produtos</h1>
             <p className="text-muted-foreground">
-              {user?.role === 'admin' 
+              {canManageProducts 
                 ? 'Gerencie o catálogo de produtos' 
                 : 'Catálogo de produtos disponíveis'}
             </p>
           </div>
-          {user?.role === 'admin' && (
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          {canManageProducts && (
+            <Dialog open={dialogOpen} onOpenChange={(open) => {
+              setDialogOpen(open);
+              if (!open) resetForm();
+            }}>
               <DialogTrigger asChild>
                 <Button className="shadow-primary">
                   <Plus className="w-4 h-4 mr-2" />
@@ -225,124 +510,11 @@ const Products: React.FC = () => {
                     Preencha as informações do novo produto
                   </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Nome *</Label>
-                      <Input
-                        id="name"
-                        value={newProduct.name}
-                        onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                        placeholder="Nome do produto"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="price">Preço</Label>
-                      <Input
-                        id="price"
-                        type="number"
-                        step="0.01"
-                        value={newProduct.price}
-                        onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Descrição</Label>
-                    <Textarea
-                      id="description"
-                      value={newProduct.description}
-                      onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                      placeholder="Descrição do produto"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="category">Categoria</Label>
-                    <Select
-                      value={newProduct.category_id}
-                      onValueChange={(value) => setNewProduct({ ...newProduct, category_id: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma categoria" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="commercial">Condições Comerciais</Label>
-                    <Textarea
-                      id="commercial"
-                      value={newProduct.commercial_conditions}
-                      onChange={(e) => setNewProduct({ ...newProduct, commercial_conditions: e.target.value })}
-                      placeholder="Condições comerciais e observações"
-                    />
-                  </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="image_url">URL da Imagem</Label>
-                      <Input
-                        id="image_url"
-                        value={newProduct.image_url}
-                        onChange={(e) => setNewProduct({ ...newProduct, image_url: e.target.value })}
-                        placeholder="https://..."
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="catalog_url">URL do Catálogo</Label>
-                      <Input
-                        id="catalog_url"
-                        value={newProduct.catalog_url}
-                        onChange={(e) => setNewProduct({ ...newProduct, catalog_url: e.target.value })}
-                        placeholder="https://..."
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="technical_sheet_url">Ficha Técnica</Label>
-                      <Input
-                        id="technical_sheet_url"
-                        value={newProduct.technical_sheet_url}
-                        onChange={(e) => setNewProduct({ ...newProduct, technical_sheet_url: e.target.value })}
-                        placeholder="https://..."
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Visibilidade por Cargo</Label>
-                    <div className="flex flex-wrap gap-4 pt-2">
-                      {(['vendedor', 'gerente', 'admin'] as AppRole[]).map((role) => (
-                        <div key={role} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`visibility-${role}`}
-                            checked={newProduct.visibility.includes(role)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setNewProduct({
-                                  ...newProduct,
-                                  visibility: [...newProduct.visibility, role],
-                                });
-                              } else {
-                                setNewProduct({
-                                  ...newProduct,
-                                  visibility: newProduct.visibility.filter((r) => r !== role),
-                                });
-                              }
-                            }}
-                          />
-                          <Label htmlFor={`visibility-${role}`} className="cursor-pointer">
-                            <RoleBadge role={role} size="sm" />
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <ProductForm 
+                  formProduct={formProduct}
+                  setFormProduct={setFormProduct}
+                  categories={categories}
+                />
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setDialogOpen(false)}>
                     Cancelar
@@ -362,6 +534,76 @@ const Products: React.FC = () => {
             </Dialog>
           )}
         </div>
+
+        {/* Edit Product Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) {
+            setEditingProduct(null);
+            resetForm();
+          }
+        }}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Editar Produto</DialogTitle>
+              <DialogDescription>
+                Atualize as informações do produto
+              </DialogDescription>
+            </DialogHeader>
+            <ProductForm 
+              formProduct={formProduct}
+              setFormProduct={setFormProduct}
+              categories={categories}
+              idPrefix="edit-"
+            />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleUpdateProduct} disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  'Salvar Alterações'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Product Confirmation */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir Produto</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja excluir o produto "{deletingProduct?.name}"? Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setDeletingProduct(null)}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleDeleteProduct}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Excluindo...
+                  </>
+                ) : (
+                  'Excluir'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Filters */}
         <Card>
@@ -440,7 +682,7 @@ const Products: React.FC = () => {
                   <p className="text-xl font-bold text-primary">
                     {formatPrice(product.price)}
                   </p>
-                  {user?.role === 'admin' && product.visibility.length > 0 && (
+                  {canManageProducts && product.visibility.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                       {product.visibility.map((role) => (
                         <RoleBadge key={role} role={role} size="sm" showIcon={false} />
@@ -448,7 +690,7 @@ const Products: React.FC = () => {
                     </div>
                   )}
                 </CardContent>
-                <CardFooter className="gap-2">
+                <CardFooter className="gap-2 flex-wrap">
                   <Button 
                     variant="outline" 
                     size="sm" 
@@ -458,6 +700,28 @@ const Products: React.FC = () => {
                     <Eye className="w-4 h-4 mr-1" />
                     Detalhes
                   </Button>
+                  {canManageProducts && (
+                    <>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleEditProduct(product)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => {
+                          setDeletingProduct(product);
+                          setDeleteDialogOpen(true);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </>
+                  )}
                   {(product.catalog_url || product.technical_sheet_url) && (
                     <Button variant="outline" size="sm">
                       <Download className="w-4 h-4" />
