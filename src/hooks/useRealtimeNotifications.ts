@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -28,6 +28,9 @@ export const useRealtimeNotifications = () => {
   });
   const [newAlerts, setNewAlerts] = useState<NewNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Track dismissed alerts to prevent them from reappearing
+  const dismissedAlertIds = useRef<Set<string>>(new Set());
 
   const fetchUnreadCount = useCallback(async () => {
     if (!user?.id || !user?.role) return;
@@ -65,30 +68,42 @@ export const useRealtimeNotifications = () => {
       const readUserIds = new Set(readUserNotifications?.map(r => r.user_notification_id) || []);
       const unreadUserCount = userNotifications?.filter(n => !readUserIds.has(n.id)).length || 0;
 
-      // Get unread ticket messages (admin replies for users, user messages for admins)
-      const { data: userTickets } = await supabase
-        .from('tickets')
-        .select('id')
-        .eq('user_id', user.id);
-
+      // Get unread ticket messages only from OPEN tickets
       let unreadTicketMessages = 0;
       
       if (user.role === 'admin') {
-        // Admin sees messages from users
-        const { data: ticketMessages } = await supabase
-          .from('ticket_messages')
-          .select('id, ticket_id')
-          .eq('is_admin_reply', false);
-        unreadTicketMessages = ticketMessages?.length || 0;
-      } else if (userTickets && userTickets.length > 0) {
-        // Users see admin replies on their tickets
-        const ticketIds = userTickets.map(t => t.id);
-        const { data: ticketMessages } = await supabase
-          .from('ticket_messages')
+        // Admin sees messages from users on open tickets only
+        const { data: openTickets } = await supabase
+          .from('tickets')
           .select('id')
-          .in('ticket_id', ticketIds)
-          .eq('is_admin_reply', true);
-        unreadTicketMessages = ticketMessages?.length || 0;
+          .in('status', ['aberto', 'em_andamento']);
+        
+        if (openTickets && openTickets.length > 0) {
+          const openTicketIds = openTickets.map(t => t.id);
+          const { data: ticketMessages } = await supabase
+            .from('ticket_messages')
+            .select('id')
+            .in('ticket_id', openTicketIds)
+            .eq('is_admin_reply', false);
+          unreadTicketMessages = ticketMessages?.length || 0;
+        }
+      } else {
+        // Users see admin replies on their OPEN tickets only
+        const { data: userOpenTickets } = await supabase
+          .from('tickets')
+          .select('id')
+          .eq('user_id', user.id)
+          .in('status', ['aberto', 'em_andamento']);
+        
+        if (userOpenTickets && userOpenTickets.length > 0) {
+          const ticketIds = userOpenTickets.map(t => t.id);
+          const { data: ticketMessages } = await supabase
+            .from('ticket_messages')
+            .select('id')
+            .in('ticket_id', ticketIds)
+            .eq('is_admin_reply', true);
+          unreadTicketMessages = ticketMessages?.length || 0;
+        }
       }
 
       setUnreadCount({
@@ -105,6 +120,9 @@ export const useRealtimeNotifications = () => {
   }, [user?.id, user?.role]);
 
   const addNewAlert = useCallback((notification: NewNotification) => {
+    // Don't add if already dismissed
+    if (dismissedAlertIds.current.has(notification.id)) return;
+    
     setNewAlerts(prev => {
       // Avoid duplicates
       if (prev.some(a => a.id === notification.id)) return prev;
@@ -113,11 +131,24 @@ export const useRealtimeNotifications = () => {
   }, []);
 
   const dismissAlert = useCallback((id: string) => {
+    // Mark as dismissed so it won't reappear
+    dismissedAlertIds.current.add(id);
     setNewAlerts(prev => prev.filter(a => a.id !== id));
   }, []);
 
   const dismissAllAlerts = useCallback(() => {
+    // Mark all current alerts as dismissed
+    newAlerts.forEach(alert => dismissedAlertIds.current.add(alert.id));
     setNewAlerts([]);
+  }, [newAlerts]);
+
+  // Remove alerts for resolved tickets
+  const removeTicketAlerts = useCallback((ticketId: string) => {
+    setNewAlerts(prev => {
+      const alertsToRemove = prev.filter(a => a.ticketId === ticketId);
+      alertsToRemove.forEach(a => dismissedAlertIds.current.add(a.id));
+      return prev.filter(a => a.ticketId !== ticketId);
+    });
   }, []);
 
   const markAllAsRead = async () => {
@@ -178,7 +209,13 @@ export const useRealtimeNotifications = () => {
         userNotifications: 0,
         total: 0 
       }));
-      dismissAllAlerts();
+      
+      // Dismiss notification alerts (not ticket alerts)
+      setNewAlerts(prev => {
+        const notificationAlerts = prev.filter(a => a.type !== 'ticket_message');
+        notificationAlerts.forEach(a => dismissedAlertIds.current.add(a.id));
+        return prev.filter(a => a.type === 'ticket_message');
+      });
     } catch (error) {
       console.error('Error marking notifications as read:', error);
     }
@@ -253,19 +290,25 @@ export const useRealtimeNotifications = () => {
         async (payload) => {
           const newMessage = payload.new as any;
           
+          // Check ticket status first
+          const { data: ticket } = await supabase
+            .from('tickets')
+            .select('title, user_id, status')
+            .eq('id', newMessage.ticket_id)
+            .single();
+          
+          // Only show alerts for open/in_progress tickets
+          if (!ticket || ticket.status === 'resolvido' || ticket.status === 'fechado') {
+            return;
+          }
+          
           // If admin and message is from user, show alert
           if (user.role === 'admin' && !newMessage.is_admin_reply) {
-            const { data: ticket } = await supabase
-              .from('tickets')
-              .select('title')
-              .eq('id', newMessage.ticket_id)
-              .single();
-              
             addNewAlert({
               id: newMessage.id,
               type: 'ticket_message',
               title: 'Nova mensagem em ticket',
-              message: ticket?.title || 'Novo chamado recebeu uma mensagem',
+              message: ticket.title || 'Novo chamado recebeu uma mensagem',
               createdAt: newMessage.created_at,
               ticketId: newMessage.ticket_id,
             });
@@ -274,18 +317,12 @@ export const useRealtimeNotifications = () => {
           
           // If user and message is from admin (and it's their ticket)
           if (user.role !== 'admin' && newMessage.is_admin_reply) {
-            const { data: ticket } = await supabase
-              .from('tickets')
-              .select('title, user_id')
-              .eq('id', newMessage.ticket_id)
-              .single();
-              
-            if (ticket?.user_id === user.id) {
+            if (ticket.user_id === user.id) {
               addNewAlert({
                 id: newMessage.id,
                 type: 'ticket_message',
                 title: 'Resposta do suporte',
-                message: ticket?.title || 'Seu chamado recebeu uma resposta',
+                message: ticket.title || 'Seu chamado recebeu uma resposta',
                 createdAt: newMessage.created_at,
                 ticketId: newMessage.ticket_id,
               });
@@ -296,12 +333,34 @@ export const useRealtimeNotifications = () => {
       )
       .subscribe();
 
+    // Subscribe to ticket status changes to remove alerts when resolved
+    const ticketStatusChannel = supabase
+      .channel('ticket-status-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tickets',
+        },
+        (payload) => {
+          const updatedTicket = payload.new as any;
+          // If ticket is resolved or closed, remove its alerts
+          if (updatedTicket.status === 'resolvido' || updatedTicket.status === 'fechado') {
+            removeTicketAlerts(updatedTicket.id);
+            fetchUnreadCount();
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(notificationsChannel);
       supabase.removeChannel(userNotificationsChannel);
       supabase.removeChannel(ticketMessagesChannel);
+      supabase.removeChannel(ticketStatusChannel);
     };
-  }, [user?.id, user?.role, addNewAlert, fetchUnreadCount]);
+  }, [user?.id, user?.role, addNewAlert, fetchUnreadCount, removeTicketAlerts]);
 
   useEffect(() => {
     fetchUnreadCount();
