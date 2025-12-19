@@ -27,6 +27,7 @@ import {
   Upload,
   Package,
   HelpCircle,
+  TicketIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import UnreadNotificationsAlert from '@/components/UnreadNotificationsAlert';
@@ -37,6 +38,7 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   roles: ('admin' | 'gerente' | 'vendedor')[];
+  highlight?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -48,6 +50,7 @@ const navItems: NavItem[] = [
   { label: 'Relatórios', href: '/relatorios', icon: BarChart3, roles: ['admin', 'gerente'] },
   { label: 'Materiais Comerciais', href: '/downloads', icon: FileText, roles: ['admin', 'gerente', 'vendedor'] },
   { label: 'Notificações', href: '/notificacoes', icon: Bell, roles: ['admin', 'gerente', 'vendedor'] },
+  { label: 'Tickets', href: '/tickets', icon: TicketIcon, roles: ['admin', 'gerente', 'vendedor'], highlight: true },
   { label: 'Ajuda', href: '/ajuda', icon: HelpCircle, roles: ['admin', 'gerente', 'vendedor'] },
 ];
 
@@ -107,10 +110,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                     "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200",
                     isActive 
                       ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md" 
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      : item.highlight
+                        ? "bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                   )}
                 >
-                  <Icon className="w-5 h-5" />
+                  <Icon className={cn("w-5 h-5", item.highlight && !isActive && "text-amber-400")} />
                   <span className="font-medium">{item.label}</span>
                 </Link>
               );
