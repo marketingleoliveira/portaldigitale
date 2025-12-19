@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,6 +38,7 @@ interface ProductWithDetails extends Product {
 }
 
 const Products: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
   const [products, setProducts] = useState<ProductWithDetails[]>([]);
@@ -447,7 +449,12 @@ const Products: React.FC = () => {
                   )}
                 </CardContent>
                 <CardFooter className="gap-2">
-                  <Button variant="outline" size="sm" className="flex-1">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1"
+                    onClick={() => navigate(`/produtos/${product.id}`)}
+                  >
                     <Eye className="w-4 h-4 mr-1" />
                     Detalhes
                   </Button>
