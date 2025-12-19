@@ -40,7 +40,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'gerente', 'vendedor'] },
-  { label: 'Catálogo de Produtos', href: '/produtos', icon: Package, roles: ['admin', 'gerente', 'vendedor'] },
+  { label: 'Catálogo', href: '/produtos', icon: Package, roles: ['admin', 'gerente', 'vendedor'] },
   { label: 'Categorias', href: '/categorias', icon: FolderOpen, roles: ['admin'] },
   { label: 'Usuários', href: '/usuarios', icon: Users, roles: ['admin'] },
   { label: 'Arquivos', href: '/arquivos', icon: Upload, roles: ['admin'] },
