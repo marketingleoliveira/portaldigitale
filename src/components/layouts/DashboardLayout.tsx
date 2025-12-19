@@ -26,6 +26,7 @@ import {
   User,
   Upload,
   Package,
+  HelpCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import UnreadNotificationsAlert from '@/components/UnreadNotificationsAlert';
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   { label: 'Relatórios', href: '/relatorios', icon: BarChart3, roles: ['admin', 'gerente'] },
   { label: 'Materiais Comerciais', href: '/downloads', icon: FileText, roles: ['admin', 'gerente', 'vendedor'] },
   { label: 'Notificações', href: '/notificacoes', icon: Bell, roles: ['admin', 'gerente', 'vendedor'] },
+  { label: 'Ajuda', href: '/ajuda', icon: HelpCircle, roles: ['admin', 'gerente', 'vendedor'] },
 ];
 
 interface DashboardLayoutProps {
