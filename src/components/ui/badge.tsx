@@ -13,6 +13,7 @@ const badgeVariants = cva(
         destructive: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
         outline: "text-foreground",
         success: "border-transparent bg-green-500 text-white hover:bg-green-600",
+        dev: "border-transparent bg-role-dev text-white hover:bg-role-dev/80",
         admin: "border-transparent bg-role-admin text-white hover:bg-role-admin/80",
         gerente: "border-transparent bg-role-gerente text-white hover:bg-role-gerente/80",
         vendedor: "border-transparent bg-role-vendedor text-white hover:bg-role-vendedor/80",
