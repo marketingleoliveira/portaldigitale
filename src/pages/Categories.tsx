@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { hasFullAccess } from '@/types/auth';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -379,7 +380,7 @@ const Categories: React.FC = () => {
     cat.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (user?.role !== 'admin') {
+  if (!hasFullAccess(user?.role)) {
     return (
       <DashboardLayout>
         <Card>
