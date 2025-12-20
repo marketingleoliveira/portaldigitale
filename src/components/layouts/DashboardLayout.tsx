@@ -118,7 +118,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           <div className="flex flex-col h-full">
             {/* Logo */}
             <div className="p-6 border-b border-sidebar-border">
-              <Logo className="text-sidebar-foreground" />
+              <Logo variant="light" />
             </div>
 
             {/* Navigation */}
