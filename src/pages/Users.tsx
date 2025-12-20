@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
-import { UserProfile, UserRole, AppRole, ROLE_LABELS } from '@/types/auth';
+import { UserProfile, UserRole, AppRole, ROLE_LABELS, hasFullAccess } from '@/types/auth';
 import RoleBadge from '@/components/RoleBadge';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -75,7 +75,7 @@ const Users: React.FC = () => {
   });
 
   useEffect(() => {
-    if (user?.role === 'admin') {
+    if (hasFullAccess(user?.role)) {
       fetchUsers();
     }
   }, [user]);
@@ -267,7 +267,7 @@ const Users: React.FC = () => {
       u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (user?.role !== 'admin') {
+  if (!hasFullAccess(user?.role)) {
     return (
       <DashboardLayout>
         <Card>

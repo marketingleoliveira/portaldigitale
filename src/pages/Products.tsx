@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { Product, Category, AppRole } from '@/types/auth';
+import { Product, Category, AppRole, isManagerOrAbove } from '@/types/auth';
 import RoleBadge from '@/components/RoleBadge';
 import { Search, Package, FileText, Download, Plus, Filter, Eye, Pencil, Trash2 } from 'lucide-react';
 import {
@@ -221,7 +221,7 @@ const Products: React.FC = () => {
     visibility: ['vendedor', 'gerente', 'admin'] as AppRole[],
   });
 
-  const canManageProducts = user?.role === 'admin' || user?.role === 'gerente';
+  const canManageProducts = isManagerOrAbove(user?.role);
 
   const resetForm = () => {
     setFormProduct({

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { hasFullAccess } from '@/types/auth';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
@@ -80,7 +81,7 @@ const Dashboard: React.FC = () => {
         let usersCount = 0;
         let logsCount = 0;
 
-        if (user?.role === 'admin' || user?.role === 'dev') {
+        if (hasFullAccess(user?.role)) {
           const { count: users } = await supabase
             .from('profiles')
             .select('*', { count: 'exact', head: true });
