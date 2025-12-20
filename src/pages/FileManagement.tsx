@@ -711,7 +711,6 @@ const FileManagement: React.FC = () => {
                       <TableHead>Nome</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead>Tamanho</TableHead>
-                      <TableHead>Visibilidade</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -733,15 +732,6 @@ const FileManagement: React.FC = () => {
                         </TableCell>
                         <TableCell>{getFileDisplayCategory(file)}</TableCell>
                         <TableCell>{formatFileSize(file.file_size)}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {file.visibility?.map(role => (
-                              <Badge key={role} variant={role}>
-                                {ROLE_LABELS[role]}
-                              </Badge>
-                            ))}
-                          </div>
-                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
