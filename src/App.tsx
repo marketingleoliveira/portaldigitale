@@ -24,6 +24,7 @@ import Tickets from "./pages/Tickets";
 import NewTicket from "./pages/NewTicket";
 import TicketDetails from "./pages/TicketDetails";
 import NotFound from "./pages/NotFound";
+import Team from "./pages/Team";
 
 const queryClient = new QueryClient();
 
@@ -43,12 +44,13 @@ const App = () => (
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/produtos" element={<ProtectedRoute><Products /></ProtectedRoute>} />
               <Route path="/produtos/:id" element={<ProtectedRoute><ProductDetails /></ProtectedRoute>} />
-              <Route path="/categorias" element={<ProtectedRoute allowedRoles={['admin']}><Categories /></ProtectedRoute>} />
-              <Route path="/usuarios" element={<ProtectedRoute allowedRoles={['admin']}><Users /></ProtectedRoute>} />
-              <Route path="/arquivos" element={<ProtectedRoute allowedRoles={['admin']}><FileManagement /></ProtectedRoute>} />
+              <Route path="/categorias" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><Categories /></ProtectedRoute>} />
+              <Route path="/usuarios" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><Users /></ProtectedRoute>} />
+              <Route path="/equipe" element={<ProtectedRoute><Team /></ProtectedRoute>} />
+              <Route path="/arquivos" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><FileManagement /></ProtectedRoute>} />
               <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
               <Route path="/notificacoes" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-              <Route path="/relatorios" element={<ProtectedRoute allowedRoles={['admin', 'gerente']}><Reports /></ProtectedRoute>} />
+              <Route path="/relatorios" element={<ProtectedRoute allowedRoles={['dev', 'admin', 'gerente']}><Reports /></ProtectedRoute>} />
               <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/ajuda" element={<ProtectedRoute><Help /></ProtectedRoute>} />
               <Route path="/tickets" element={<ProtectedRoute><Tickets /></ProtectedRoute>} />

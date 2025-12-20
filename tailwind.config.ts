@@ -66,6 +66,7 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
         role: {
+          dev: "hsl(var(--role-dev))",
           admin: "hsl(var(--role-admin))",
           gerente: "hsl(var(--role-gerente))",
           vendedor: "hsl(var(--role-vendedor))",

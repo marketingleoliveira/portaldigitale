@@ -34,25 +34,29 @@ import { cn } from '@/lib/utils';
 import NotificationBanner from '@/components/NotificationBanner';
 import PersistentNotificationAlert from '@/components/PersistentNotificationAlert';
 
+import { AppRole } from '@/types/auth';
+import { UsersRound } from 'lucide-react';
+
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
-  roles: ('admin' | 'gerente' | 'vendedor')[];
+  roles: AppRole[];
   highlight?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'gerente', 'vendedor'] },
-  { label: 'Catálogo', href: '/produtos', icon: Package, roles: ['admin', 'gerente', 'vendedor'] },
-  { label: 'Categorias', href: '/categorias', icon: FolderOpen, roles: ['admin'] },
-  { label: 'Usuários', href: '/usuarios', icon: Users, roles: ['admin'] },
-  { label: 'Arquivos', href: '/arquivos', icon: Upload, roles: ['admin'] },
-  { label: 'Relatórios', href: '/relatorios', icon: BarChart3, roles: ['admin', 'gerente'] },
-  { label: 'Materiais Comerciais', href: '/downloads', icon: FileText, roles: ['admin', 'gerente', 'vendedor'] },
-  { label: 'Notificações', href: '/notificacoes', icon: Bell, roles: ['admin', 'gerente', 'vendedor'] },
-  { label: 'Tickets', href: '/tickets', icon: TicketIcon, roles: ['admin', 'gerente', 'vendedor'], highlight: true },
-  { label: 'Ajuda', href: '/ajuda', icon: HelpCircle, roles: ['admin', 'gerente', 'vendedor'] },
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
+  { label: 'Catálogo', href: '/produtos', icon: Package, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
+  { label: 'Categorias', href: '/categorias', icon: FolderOpen, roles: ['dev', 'admin'] },
+  { label: 'Usuários', href: '/usuarios', icon: Users, roles: ['dev', 'admin'] },
+  { label: 'Equipe', href: '/equipe', icon: UsersRound, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
+  { label: 'Arquivos', href: '/arquivos', icon: Upload, roles: ['dev', 'admin'] },
+  { label: 'Relatórios', href: '/relatorios', icon: BarChart3, roles: ['dev', 'admin', 'gerente'] },
+  { label: 'Materiais Comerciais', href: '/downloads', icon: FileText, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
+  { label: 'Notificações', href: '/notificacoes', icon: Bell, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
+  { label: 'Tickets', href: '/tickets', icon: TicketIcon, roles: ['dev', 'admin', 'gerente', 'vendedor'], highlight: true },
+  { label: 'Ajuda', href: '/ajuda', icon: HelpCircle, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
 ];
 
 interface DashboardLayoutProps {

@@ -1,4 +1,4 @@
-export type AppRole = 'admin' | 'gerente' | 'vendedor';
+export type AppRole = 'admin' | 'gerente' | 'vendedor' | 'dev';
 
 export interface UserProfile {
   id: string;
@@ -104,12 +104,14 @@ export interface FileVisibility {
 }
 
 export const ROLE_LABELS: Record<AppRole, string> = {
+  dev: 'Desenvolvedor',
   admin: 'Administrador',
   gerente: 'Gerente',
   vendedor: 'Vendedor',
 };
 
 export const ROLE_COLORS: Record<AppRole, string> = {
+  dev: 'bg-role-dev',
   admin: 'bg-role-admin',
   gerente: 'bg-role-gerente',
   vendedor: 'bg-role-vendedor',
