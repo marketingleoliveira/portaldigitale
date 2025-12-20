@@ -303,6 +303,9 @@ const Users: React.FC = () => {
 
       if (profileError) throw profileError;
 
+      // Remove user from local state immediately for better UX
+      setUsers(prev => prev.filter(u => u.id !== deletingUser.id));
+
       toast({
         title: 'Sucesso',
         description: 'Usuário excluído com sucesso',
@@ -310,7 +313,6 @@ const Users: React.FC = () => {
 
       setDeleteDialogOpen(false);
       setDeletingUser(null);
-      fetchUsers();
     } catch (error) {
       console.error('Error deleting user:', error);
       toast({
