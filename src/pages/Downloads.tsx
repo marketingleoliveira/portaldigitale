@@ -184,13 +184,6 @@ const Downloads: React.FC = () => {
                       {file.description}
                     </p>
                   )}
-                  <div className="flex flex-wrap gap-1">
-                    {file.visibility?.map(role => (
-                      <Badge key={role} variant={role} className="text-xs">
-                        {ROLE_LABELS[role]}
-                      </Badge>
-                    ))}
-                  </div>
                   <Button
                     variant="outline"
                     className="w-full"
