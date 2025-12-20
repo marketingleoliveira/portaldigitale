@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
-import { Product, Category, AppRole } from '@/types/auth';
+import { Product, Category, AppRole, hasFullAccess } from '@/types/auth';
 import RoleBadge from '@/components/RoleBadge';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAccessLog } from '@/hooks/useAccessLog';
@@ -294,7 +294,7 @@ const ProductDetails: React.FC = () => {
                 </div>
 
                 {/* Visibility - Admin only */}
-                {user?.role === 'admin' && product.visibility.length > 0 && (
+                {hasFullAccess(user?.role) && product.visibility.length > 0 && (
                   <>
                     <Separator />
                     <div>

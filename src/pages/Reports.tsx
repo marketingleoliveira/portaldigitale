@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
-import { AccessLog, AppRole } from '@/types/auth';
+import { AccessLog, AppRole, isManagerOrAbove } from '@/types/auth';
 import {
   Table,
   TableBody,
@@ -60,7 +60,7 @@ const Reports: React.FC = () => {
   });
 
   useEffect(() => {
-    if (user?.role === 'admin' || user?.role === 'gerente') {
+    if (isManagerOrAbove(user?.role)) {
       fetchUsers();
       fetchOverallStats();
     }
@@ -255,7 +255,7 @@ const Reports: React.FC = () => {
       u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (user?.role !== 'admin' && user?.role !== 'gerente') {
+  if (!isManagerOrAbove(user?.role)) {
     return (
       <DashboardLayout>
         <Card>
