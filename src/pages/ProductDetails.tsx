@@ -9,6 +9,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Product, Category, AppRole } from '@/types/auth';
 import RoleBadge from '@/components/RoleBadge';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAccessLog } from '@/hooks/useAccessLog';
+import { useToast } from '@/hooks/use-toast';
 import { 
   ArrowLeft, 
   Package, 
@@ -31,8 +33,32 @@ const ProductDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { logDownload } = useAccessLog();
+  const { toast } = useToast();
   const [product, setProduct] = useState<ProductWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const handleDownloadCatalog = async () => {
+    if (!product?.catalog_url) return;
+    
+    await logDownload('catalog', product.id);
+    window.open(product.catalog_url, '_blank');
+    toast({
+      title: 'Download iniciado',
+      description: 'Baixando catálogo do produto',
+    });
+  };
+
+  const handleDownloadTechnicalSheet = async () => {
+    if (!product?.technical_sheet_url) return;
+    
+    await logDownload('technical_sheet', product.id);
+    window.open(product.technical_sheet_url, '_blank');
+    toast({
+      title: 'Download iniciado',
+      description: 'Baixando ficha técnica',
+    });
+  };
 
   useEffect(() => {
     if (id) {
@@ -214,13 +240,11 @@ const ProductDetails: React.FC = () => {
                   <Button 
                     variant="outline" 
                     className="w-full justify-start" 
-                    asChild
+                    onClick={handleDownloadCatalog}
                   >
-                    <a href={product.catalog_url} target="_blank" rel="noopener noreferrer">
-                      <BookOpen className="w-4 h-4 mr-2" />
-                      Catálogo do Produto
-                      <ExternalLink className="w-3 h-3 ml-auto" />
-                    </a>
+                    <BookOpen className="w-4 h-4 mr-2" />
+                    Catálogo do Produto
+                    <Download className="w-3 h-3 ml-auto" />
                   </Button>
                 ) : (
                   <Button variant="outline" className="w-full justify-start" disabled>
@@ -233,13 +257,11 @@ const ProductDetails: React.FC = () => {
                   <Button 
                     variant="outline" 
                     className="w-full justify-start" 
-                    asChild
+                    onClick={handleDownloadTechnicalSheet}
                   >
-                    <a href={product.technical_sheet_url} target="_blank" rel="noopener noreferrer">
-                      <FileSpreadsheet className="w-4 h-4 mr-2" />
-                      Ficha Técnica
-                      <ExternalLink className="w-3 h-3 ml-auto" />
-                    </a>
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    Ficha Técnica
+                    <Download className="w-3 h-3 ml-auto" />
                   </Button>
                 ) : (
                   <Button variant="outline" className="w-full justify-start" disabled>
