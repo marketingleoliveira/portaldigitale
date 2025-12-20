@@ -70,9 +70,10 @@ export const useRealtimeNotifications = () => {
 
       // Get unread ticket messages only from OPEN tickets
       let unreadTicketMessages = 0;
+      const hasFullAccess = user.role === 'admin' || user.role === 'dev';
       
-      if (user.role === 'admin') {
-        // Admin sees messages from users on open tickets only
+      if (hasFullAccess) {
+        // Admin/Dev sees messages from users on open tickets only
         const { data: openTickets } = await supabase
           .from('tickets')
           .select('id')
@@ -302,8 +303,10 @@ export const useRealtimeNotifications = () => {
             return;
           }
           
-          // If admin and message is from user, show alert
-          if (user.role === 'admin' && !newMessage.is_admin_reply) {
+          const hasFullAccess = user.role === 'admin' || user.role === 'dev';
+          
+          // If admin/dev and message is from user, show alert
+          if (hasFullAccess && !newMessage.is_admin_reply) {
             addNewAlert({
               id: newMessage.id,
               type: 'ticket_message',
@@ -316,7 +319,7 @@ export const useRealtimeNotifications = () => {
           }
           
           // If user and message is from admin (and it's their ticket)
-          if (user.role !== 'admin' && newMessage.is_admin_reply) {
+          if (!hasFullAccess && newMessage.is_admin_reply) {
             if (ticket.user_id === user.id) {
               addNewAlert({
                 id: newMessage.id,
@@ -345,9 +348,10 @@ export const useRealtimeNotifications = () => {
         },
         async (payload) => {
           const newTicket = payload.new as any;
+          const hasFullAccess = user.role === 'admin' || user.role === 'dev';
           
-          // Only admins should receive new ticket alerts
-          if (user.role === 'admin' && newTicket.user_id !== user.id) {
+          // Only admins/devs should receive new ticket alerts
+          if (hasFullAccess && newTicket.user_id !== user.id) {
             // Get the user name who created the ticket
             const { data: profile } = await supabase
               .from('profiles')
