@@ -167,12 +167,12 @@ const Team: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-8">
-            {/* Admins - Top Level */}
+            {/* Diretores - Top Level */}
             {admins.length > 0 && (
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Shield className="w-5 h-5 text-role-admin" />
-                  <h3 className="font-semibold text-lg">Administração</h3>
+                  <h3 className="font-semibold text-lg">Diretoria</h3>
                   <Badge variant="secondary" className="ml-2">{admins.length}</Badge>
                 </div>
                 <div className="flex justify-center">
@@ -254,7 +254,7 @@ const Team: React.FC = () => {
           <Card>
             <CardContent className="pt-6 text-center">
               <p className="text-3xl font-bold text-role-admin">{admins.length}</p>
-              <p className="text-sm text-muted-foreground">Administradores</p>
+              <p className="text-sm text-muted-foreground">Diretores</p>
             </CardContent>
           </Card>
           <Card>
