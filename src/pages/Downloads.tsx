@@ -8,13 +8,34 @@ import { FileItem, AppRole, ROLE_LABELS } from '@/types/auth';
 import { FileText, Download, Search, File, Loader2, FolderOpen } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAccessLog } from '@/hooks/useAccessLog';
+import { useToast } from '@/hooks/use-toast';
 
 const Downloads: React.FC = () => {
   const { user } = useAuth();
+  const { logDownload } = useAccessLog();
+  const { toast } = useToast();
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  const handleDownload = async (file: FileItem) => {
+    try {
+      // Log the download
+      await logDownload('file', file.id);
+      
+      // Open the file
+      window.open(file.file_url, '_blank');
+      
+      toast({
+        title: 'Download iniciado',
+        description: `Baixando ${file.name}`,
+      });
+    } catch (error) {
+      console.error('Error during download:', error);
+    }
+  };
 
   useEffect(() => {
     fetchFiles();
@@ -173,7 +194,7 @@ const Downloads: React.FC = () => {
                   <Button
                     variant="outline"
                     className="w-full"
-                    onClick={() => window.open(file.file_url, '_blank')}
+                    onClick={() => handleDownload(file)}
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Download
