@@ -76,11 +76,11 @@ const Dashboard: React.FC = () => {
           .select('*', { count: 'exact', head: true })
           .eq('status', 'aberto');
 
-        // Admin-only stats
+        // Admin/Dev-only stats
         let usersCount = 0;
         let logsCount = 0;
 
-        if (user?.role === 'admin') {
+        if (user?.role === 'admin' || user?.role === 'dev') {
           const { count: users } = await supabase
             .from('profiles')
             .select('*', { count: 'exact', head: true });
@@ -142,7 +142,7 @@ const Dashboard: React.FC = () => {
       color: 'text-primary',
       bgColor: 'bg-primary/10',
       href: '/produtos',
-      roles: ['admin', 'gerente', 'vendedor'],
+      roles: ['dev', 'admin', 'gerente', 'vendedor'],
     },
     {
       title: 'Categorias',
@@ -152,7 +152,7 @@ const Dashboard: React.FC = () => {
       color: 'text-success',
       bgColor: 'bg-success/10',
       href: '/categorias',
-      roles: ['admin', 'gerente', 'vendedor'],
+      roles: ['dev', 'admin', 'gerente'],
     },
     {
       title: 'Arquivos',
@@ -162,7 +162,7 @@ const Dashboard: React.FC = () => {
       color: 'text-role-gerente',
       bgColor: 'bg-role-gerente/10',
       href: '/downloads',
-      roles: ['admin', 'gerente', 'vendedor'],
+      roles: ['dev', 'admin', 'gerente', 'vendedor'],
     },
     {
       title: 'Usuários',
@@ -172,7 +172,7 @@ const Dashboard: React.FC = () => {
       color: 'text-warning',
       bgColor: 'bg-warning/10',
       href: '/usuarios',
-      roles: ['admin'],
+      roles: ['dev', 'admin'],
     },
     {
       title: 'Acessos',
@@ -182,12 +182,12 @@ const Dashboard: React.FC = () => {
       color: 'text-role-admin',
       bgColor: 'bg-role-admin/10',
       href: '/relatorios',
-      roles: ['admin'],
+      roles: ['dev', 'admin'],
     },
   ];
 
   const filteredStats = statsCards.filter(card => 
-    user?.role && card.roles.includes(user.role)
+    user?.role && (card.roles.includes(user.role) || user.role === 'dev')
   );
 
   const quickActions = [
@@ -198,7 +198,7 @@ const Dashboard: React.FC = () => {
       color: 'text-primary',
       bgColor: 'bg-primary/10',
       href: '/produtos',
-      roles: ['admin', 'gerente', 'vendedor'],
+      roles: ['dev', 'admin', 'gerente', 'vendedor'],
     },
     {
       title: 'Materiais Comerciais',
@@ -207,7 +207,7 @@ const Dashboard: React.FC = () => {
       color: 'text-success',
       bgColor: 'bg-success/10',
       href: '/downloads',
-      roles: ['admin', 'gerente', 'vendedor'],
+      roles: ['dev', 'admin', 'gerente', 'vendedor'],
     },
     {
       title: 'Notificações',
@@ -216,7 +216,7 @@ const Dashboard: React.FC = () => {
       color: 'text-warning',
       bgColor: 'bg-warning/10',
       href: '/notificacoes',
-      roles: ['admin', 'gerente', 'vendedor'],
+      roles: ['dev', 'admin', 'gerente'],
     },
     {
       title: 'Central de Ajuda',
@@ -225,7 +225,7 @@ const Dashboard: React.FC = () => {
       color: 'text-role-gerente',
       bgColor: 'bg-role-gerente/10',
       href: '/ajuda',
-      roles: ['admin', 'gerente', 'vendedor'],
+      roles: ['dev', 'admin', 'gerente', 'vendedor'],
     },
     {
       title: 'Gerenciar Usuários',
@@ -234,12 +234,12 @@ const Dashboard: React.FC = () => {
       color: 'text-role-admin',
       bgColor: 'bg-role-admin/10',
       href: '/usuarios',
-      roles: ['admin'],
+      roles: ['dev', 'admin'],
     },
   ];
 
   const filteredActions = quickActions.filter(action => 
-    user?.role && action.roles.includes(user.role)
+    user?.role && (action.roles.includes(user.role) || user.role === 'dev')
   );
 
   return (
@@ -414,6 +414,15 @@ const Dashboard: React.FC = () => {
                     <RoleBadge role={user.role} />
                   </div>
                   <div className="text-sm text-muted-foreground space-y-2">
+                    {user.role === 'dev' && (
+                      <>
+                        <p>✓ Acesso total ao sistema</p>
+                        <p>✓ Controle de desenvolvimento</p>
+                        <p>✓ Gerenciamento de usuários</p>
+                        <p>✓ Todas as funcionalidades</p>
+                        <p>✓ Suporte técnico</p>
+                      </>
+                    )}
                     {user.role === 'admin' && (
                       <>
                         <p>✓ Acesso total ao sistema</p>
@@ -426,16 +435,17 @@ const Dashboard: React.FC = () => {
                     {user.role === 'gerente' && (
                       <>
                         <p>✓ Acesso a dados essenciais</p>
-                        <p>✓ Visualização de produtos</p>
-                        <p>✓ Relatórios básicos</p>
-                        <p>✓ Conteúdo de gerência e vendedores</p>
+                        <p>✓ Edição de produtos</p>
+                        <p>✓ Relatórios da equipe</p>
+                        <p>✓ Gestão de vendedores</p>
                       </>
                     )}
                     {user.role === 'vendedor' && (
                       <>
-                        <p>✓ Catálogo de produtos liberados</p>
-                        <p>✓ Downloads autorizados</p>
-                        <p>✓ Notificações da equipe</p>
+                        <p>✓ Catálogo de produtos</p>
+                        <p>✓ Materiais comerciais</p>
+                        <p>✓ Visualização da equipe</p>
+                        <p>✓ Abertura de tickets</p>
                       </>
                     )}
                   </div>

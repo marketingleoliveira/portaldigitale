@@ -105,7 +105,7 @@ export interface FileVisibility {
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   dev: 'Desenvolvedor',
-  admin: 'Administrador',
+  admin: 'Diretor',
   gerente: 'Gerente',
   vendedor: 'Vendedor',
 };
@@ -115,4 +115,14 @@ export const ROLE_COLORS: Record<AppRole, string> = {
   admin: 'bg-role-admin',
   gerente: 'bg-role-gerente',
   vendedor: 'bg-role-vendedor',
+};
+
+// Helper to check if role has full access (dev or admin/diretor)
+export const hasFullAccess = (role: AppRole | null | undefined): boolean => {
+  return role === 'dev' || role === 'admin';
+};
+
+// Helper to check if role is manager or above
+export const isManagerOrAbove = (role: AppRole | null | undefined): boolean => {
+  return role === 'dev' || role === 'admin' || role === 'gerente';
 };
