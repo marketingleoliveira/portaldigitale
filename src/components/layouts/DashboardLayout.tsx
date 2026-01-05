@@ -79,13 +79,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     dismissAllAlerts,
   } = useNotificationContext();
 
-  // Show loading spinner while user data is being fetched
-  const isUserDataLoading = loading || (user && user.role === null);
+  // Show loading spinner only during initial load, not indefinitely
+  const isUserDataLoading = loading;
 
-  // Filter nav items only when user role is available
+  // Filter nav items - if role not available, show minimal nav
   const filteredNavItems = user?.role 
     ? navItems.filter(item => item.roles.includes(user.role!))
-    : [];
+    : navItems.filter(item => item.roles.includes('vendedor')); // Default to minimal access
 
   const handleSignOut = async () => {
     await signOut();
