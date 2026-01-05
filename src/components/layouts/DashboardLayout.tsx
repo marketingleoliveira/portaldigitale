@@ -29,6 +29,7 @@ import {
   Package,
   HelpCircle,
   TicketIcon,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import NotificationBanner from '@/components/NotificationBanner';
@@ -64,7 +65,7 @@ interface DashboardLayoutProps {
 }
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -78,9 +79,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     dismissAllAlerts,
   } = useNotificationContext();
 
-  const filteredNavItems = navItems.filter(item => 
-    user?.role && item.roles.includes(user.role)
-  );
+  // Show loading spinner while user data is being fetched
+  const isUserDataLoading = loading || (user && user.role === null);
+
+  // Filter nav items only when user role is available
+  const filteredNavItems = user?.role 
+    ? navItems.filter(item => item.roles.includes(user.role!))
+    : [];
 
   const handleSignOut = async () => {
     await signOut();
@@ -127,37 +132,43 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
 
             {/* Navigation */}
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-              {filteredNavItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
-                const isNotificationsItem = item.href === '/notificacoes';
-                
-                return (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    onClick={() => setSidebarOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 relative",
-                      isActive 
-                        ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md" 
-                        : item.highlight
-                          ? "bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30"
-                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                    )}
-                  >
-                    <Icon className={cn("w-5 h-5", item.highlight && !isActive && "text-amber-400")} />
-                    <span className="font-medium">{item.label}</span>
-                    
-                    {/* Badge for notifications */}
-                    {isNotificationsItem && unreadCount.total > 0 && (
-                      <span className="absolute right-3 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center animate-pulse-glow">
-                        {unreadCount.total > 9 ? '9+' : unreadCount.total}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
+              {isUserDataLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-sidebar-foreground/50" />
+                </div>
+              ) : (
+                filteredNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
+                  const isNotificationsItem = item.href === '/notificacoes';
+                  
+                  return (
+                    <Link
+                      key={item.href}
+                      to={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 relative",
+                        isActive 
+                          ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md" 
+                          : item.highlight
+                            ? "bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/30"
+                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      )}
+                    >
+                      <Icon className={cn("w-5 h-5", item.highlight && !isActive && "text-amber-400")} />
+                      <span className="font-medium">{item.label}</span>
+                      
+                      {/* Badge for notifications */}
+                      {isNotificationsItem && unreadCount.total > 0 && (
+                        <span className="absolute right-3 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center animate-pulse-glow">
+                          {unreadCount.total > 9 ? '9+' : unreadCount.total}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })
+              )}
             </nav>
 
             {/* User Info */}

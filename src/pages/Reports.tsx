@@ -257,6 +257,17 @@ const Reports: React.FC = () => {
       u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Wait for user data to be fully loaded before checking permissions
+  if (!user || user.role === null) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   if (!isManagerOrAbove(user?.role)) {
     return (
       <DashboardLayout>
