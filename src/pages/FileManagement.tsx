@@ -21,7 +21,13 @@ import {
   Pencil,
   Link,
   Globe,
-  MapPin
+  MapPin,
+  Eye,
+  Image,
+  FileVideo,
+  FileAudio,
+  FileSpreadsheet,
+  Presentation
 } from 'lucide-react';
 import {
   Dialog,
@@ -114,6 +120,10 @@ const FileManagement: React.FC = () => {
     regions: [] as string[],
   });
   const [savingLink, setSavingLink] = useState(false);
+  
+  // Preview state
+  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchFiles();
@@ -647,6 +657,118 @@ const FileManagement: React.FC = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const getFileType = (file: FileItem): string => {
+    if (file.is_external_link) return 'link';
+    const mimeType = file.file_type?.toLowerCase() || '';
+    const url = file.file_url.toLowerCase();
+    
+    if (mimeType.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg)$/.test(url)) return 'image';
+    if (mimeType.startsWith('video/') || /\.(mp4|webm|mov|avi)$/.test(url)) return 'video';
+    if (mimeType.startsWith('audio/') || /\.(mp3|wav|ogg|m4a)$/.test(url)) return 'audio';
+    if (mimeType === 'application/pdf' || url.endsWith('.pdf')) return 'pdf';
+    if (mimeType.includes('word') || /\.(doc|docx)$/.test(url)) return 'word';
+    if (mimeType.includes('presentation') || mimeType.includes('powerpoint') || /\.(ppt|pptx)$/.test(url)) return 'powerpoint';
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || /\.(xls|xlsx)$/.test(url)) return 'excel';
+    return 'other';
+  };
+
+  const getFileIcon = (file: FileItem) => {
+    const type = getFileType(file);
+    switch (type) {
+      case 'link': return <Globe className="w-4 h-4 text-cyan-600" />;
+      case 'image': return <Image className="w-4 h-4 text-green-600" />;
+      case 'video': return <FileVideo className="w-4 h-4 text-purple-600" />;
+      case 'audio': return <FileAudio className="w-4 h-4 text-orange-600" />;
+      case 'pdf': return <FileText className="w-4 h-4 text-red-600" />;
+      case 'word': return <FileText className="w-4 h-4 text-blue-600" />;
+      case 'powerpoint': return <Presentation className="w-4 h-4 text-orange-500" />;
+      case 'excel': return <FileSpreadsheet className="w-4 h-4 text-green-600" />;
+      default: return <FileText className="w-4 h-4 text-primary" />;
+    }
+  };
+
+  const canPreviewInBrowser = (file: FileItem): boolean => {
+    const type = getFileType(file);
+    return ['image', 'video', 'audio', 'pdf', 'link'].includes(type);
+  };
+
+  const openPreview = (file: FileItem) => {
+    setPreviewFile(file);
+    setPreviewDialogOpen(true);
+  };
+
+  const renderPreviewContent = () => {
+    if (!previewFile) return null;
+    
+    const type = getFileType(previewFile);
+    
+    switch (type) {
+      case 'link':
+        return (
+          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <Globe className="w-16 h-16 text-cyan-600" />
+            <p className="text-center text-muted-foreground">
+              Este é um link externo. Clique abaixo para acessar.
+            </p>
+            <Button onClick={() => window.open(previewFile.file_url, '_blank')}>
+              <Link className="w-4 h-4 mr-2" />
+              Acessar Link
+            </Button>
+          </div>
+        );
+      case 'image':
+        return (
+          <div className="flex justify-center">
+            <img 
+              src={previewFile.file_url} 
+              alt={previewFile.name}
+              className="max-h-[70vh] object-contain rounded-lg"
+            />
+          </div>
+        );
+      case 'video':
+        return (
+          <video 
+            src={previewFile.file_url} 
+            controls 
+            className="w-full max-h-[70vh] rounded-lg"
+          >
+            Seu navegador não suporta reprodução de vídeo.
+          </video>
+        );
+      case 'audio':
+        return (
+          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <FileAudio className="w-16 h-16 text-orange-600" />
+            <audio src={previewFile.file_url} controls className="w-full max-w-md">
+              Seu navegador não suporta reprodução de áudio.
+            </audio>
+          </div>
+        );
+      case 'pdf':
+        return (
+          <iframe 
+            src={previewFile.file_url} 
+            className="w-full h-[70vh] rounded-lg border"
+            title={previewFile.name}
+          />
+        );
+      default:
+        return (
+          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <FileText className="w-16 h-16 text-muted-foreground" />
+            <p className="text-center text-muted-foreground">
+              Visualização não disponível para este tipo de arquivo.
+            </p>
+            <Button onClick={() => window.open(previewFile.file_url, '_blank')}>
+              <Download className="w-4 h-4 mr-2" />
+              Baixar Arquivo
+            </Button>
+          </div>
+        );
+    }
+  };
+
   const getFileDisplayCategory = (file: FileItem) => {
     if (file.subcategory) {
       const cat = categories.find(c => c.id === file.subcategory?.category_id);
@@ -1133,11 +1255,7 @@ const FileManagement: React.FC = () => {
                       <TableRow key={file.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            {file.is_external_link ? (
-                              <Globe className="w-4 h-4 text-cyan-600" />
-                            ) : (
-                              <FileText className="w-4 h-4 text-primary" />
-                            )}
+                            {getFileIcon(file)}
                             <div>
                               <div className="flex items-center gap-2">
                                 <p className="font-medium">{file.name}</p>
@@ -1161,6 +1279,14 @@ const FileManagement: React.FC = () => {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => openPreview(file)}
+                              title="Visualizar"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
                             <Button
                               variant="outline"
                               size="icon"
@@ -1219,6 +1345,24 @@ const FileManagement: React.FC = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Preview Dialog */}
+        <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {previewFile && getFileIcon(previewFile)}
+                {previewFile?.name}
+              </DialogTitle>
+              {previewFile?.description && (
+                <DialogDescription>{previewFile.description}</DialogDescription>
+              )}
+            </DialogHeader>
+            <div className="mt-4">
+              {renderPreviewContent()}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Edit Dialog */}
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
