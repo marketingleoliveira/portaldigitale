@@ -28,6 +28,8 @@ import {
   ChevronUp,
   ChevronDown,
   Minus,
+  Medal,
+  Crown,
 } from 'lucide-react';
 import { format, startOfDay, startOfWeek, startOfMonth, startOfYear, endOfDay, endOfWeek, endOfMonth, endOfYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -60,6 +62,17 @@ interface UserProfile {
   id: string;
   full_name: string;
   avatar_url: string | null;
+  region: string | null;
+}
+
+interface SellerRanking {
+  userId: string;
+  userName: string;
+  region: string | null;
+  totalProgress: number;
+  totalTargets: number;
+  percentage: number;
+  goalsAchieved: number;
 }
 
 const periodLabels: Record<string, string> = {
@@ -81,6 +94,7 @@ const allRoles: AppRole[] = ['dev', 'admin', 'gerente', 'vendedor'];
 const Goals: React.FC = () => {
   const { user } = useAuth();
   const isAdmin = user?.role ? hasFullAccess(user.role) : false;
+  const isDev = user?.role === 'dev';
 
   const [goals, setGoals] = useState<Goal[]>([]);
   const [progress, setProgress] = useState<GoalProgress[]>([]);
@@ -124,16 +138,14 @@ const Goals: React.FC = () => {
       if (progressError) throw progressError;
       setProgress(progressData || []);
 
-      // Fetch users for admin management
-      if (isAdmin) {
-        const { data: usersData, error: usersError } = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url')
-          .eq('is_active', true);
+      // Fetch users - always fetch for ranking
+      const { data: usersData, error: usersError } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, region')
+        .eq('is_active', true);
 
-        if (usersError) throw usersError;
-        setUsers(usersData || []);
-      }
+      if (usersError) throw usersError;
+      setUsers(usersData || []);
     } catch (error: any) {
       console.error('Error fetching goals:', error);
       toast.error('Erro ao carregar metas');
@@ -392,6 +404,53 @@ const Goals: React.FC = () => {
     return { totalGoals, achievedGoals, inProgressGoals };
   }, [goals, progress]);
 
+  // Calculate seller ranking
+  const sellerRanking = useMemo((): SellerRanking[] => {
+    if (goals.length === 0 || users.length === 0) return [];
+
+    const rankings: SellerRanking[] = users.map(userProfile => {
+      let totalProgress = 0;
+      let totalTargets = 0;
+      let goalsAchieved = 0;
+
+      goals.forEach(goal => {
+        const { start } = getPeriodDates(goal.period_type);
+        const periodStart = format(start, 'yyyy-MM-dd');
+        
+        const userProgress = progress.filter(
+          p => p.goal_id === goal.id && 
+               p.user_id === userProfile.id && 
+               p.period_start === periodStart
+        );
+        
+        const currentValue = userProgress.reduce((sum, p) => sum + p.current_value, 0);
+        totalProgress += currentValue;
+        totalTargets += goal.target_value;
+        
+        if (currentValue >= goal.target_value) {
+          goalsAchieved++;
+        }
+      });
+
+      const percentage = totalTargets > 0 ? Math.round((totalProgress / totalTargets) * 100) : 0;
+
+      return {
+        userId: userProfile.id,
+        userName: userProfile.full_name,
+        region: userProfile.region,
+        totalProgress,
+        totalTargets,
+        percentage,
+        goalsAchieved,
+      };
+    });
+
+    // Sort by percentage descending
+    return rankings
+      .filter(r => r.totalProgress > 0 || r.goalsAchieved > 0)
+      .sort((a, b) => b.percentage - a.percentage);
+  }, [goals, progress, users]);
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -416,7 +475,7 @@ const Goals: React.FC = () => {
               Acompanhe suas metas e progresso
             </p>
           </div>
-          {isAdmin && (
+          {isDev && (
             <Button onClick={() => handleOpenDialog()} className="gap-2">
               <Plus className="w-4 h-4" />
               Nova Meta
@@ -468,6 +527,73 @@ const Goals: React.FC = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Seller Ranking */}
+        {sellerRanking.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Crown className="w-5 h-5 text-yellow-500" />
+                Ranking de Vendedores
+              </CardTitle>
+              <CardDescription>
+                Classificação baseada no progresso de todas as metas ativas
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {sellerRanking.slice(0, 10).map((seller, index) => {
+                  const isTop3 = index < 3;
+                  const medalColors = ['text-yellow-500', 'text-gray-400', 'text-amber-600'];
+                  
+                  return (
+                    <div
+                      key={seller.userId}
+                      className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
+                        isTop3 ? 'bg-primary/5 border border-primary/20' : 'bg-muted/30'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 flex items-center justify-center rounded-full ${
+                          isTop3 ? 'bg-primary/20' : 'bg-muted'
+                        }`}>
+                          {isTop3 ? (
+                            <Medal className={`w-4 h-4 ${medalColors[index]}`} />
+                          ) : (
+                            <span className="text-sm font-medium text-muted-foreground">
+                              {index + 1}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-medium">{seller.userName}</p>
+                          {seller.region && (
+                            <p className="text-xs text-muted-foreground">
+                              {seller.region}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">
+                            {seller.percentage}%
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {seller.goalsAchieved}/{goals.length} metas
+                          </p>
+                        </div>
+                        <div className="w-24">
+                          <Progress value={Math.min(seller.percentage, 100)} className="h-2" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Tabs for filtering */}
         <Tabs value={selectedTab} onValueChange={setSelectedTab}>
@@ -531,7 +657,7 @@ const Goals: React.FC = () => {
                               </CardDescription>
                             )}
                           </div>
-                          {isAdmin && (
+                          {isDev && (
                             <div className="flex gap-1">
                               <Button
                                 variant="ghost"
@@ -569,15 +695,17 @@ const Goals: React.FC = () => {
                             >
                               {percentage}% completo
                             </span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenProgressDialog(goal)}
-                              className="gap-1"
-                            >
-                              <TrendingUp className="w-3 h-3" />
-                              Atualizar
-                            </Button>
+                            {isDev && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenProgressDialog(goal)}
+                                className="gap-1"
+                              >
+                                <TrendingUp className="w-3 h-3" />
+                                Atualizar
+                              </Button>
+                            )}
                           </div>
                         </div>
 
@@ -616,14 +744,16 @@ const Goals: React.FC = () => {
                                       >
                                         {up.value.toLocaleString('pt-BR')} ({userPercentage}%)
                                       </span>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6"
-                                        onClick={() => handleOpenProgressDialog(goal, up.userId)}
-                                      >
-                                        <Edit className="w-3 h-3" />
-                                      </Button>
+                                      {isDev && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6"
+                                          onClick={() => handleOpenProgressDialog(goal, up.userId)}
+                                        >
+                                          <Edit className="w-3 h-3" />
+                                        </Button>
+                                      )}
                                     </div>
                                   </div>
                                 );
@@ -771,7 +901,7 @@ const Goals: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-4">
-            {isAdmin && (
+            {isDev && (
               <div className="space-y-2">
                 <Label>Usuário</Label>
                 <Select
