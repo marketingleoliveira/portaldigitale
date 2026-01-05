@@ -444,12 +444,33 @@ const Goals: React.FC = () => {
     }
   };
 
-  const handleOpenCertificate = (goal: Goal, userName: string) => {
+  const handleOpenCertificate = async (goal: Goal, userName: string) => {
+    const achievedDate = new Date();
+    const goalValueFormatted = formatValue(goal.target_value, goal.unit);
+    
+    // Save certificate to database
+    try {
+      await supabase.from('achieved_certificates').upsert({
+        user_id: user?.id,
+        goal_id: goal.id,
+        goal_title: goal.title,
+        goal_value: goalValueFormatted,
+        period_type: goal.period_type,
+        achieved_date: format(achievedDate, 'yyyy-MM-dd'),
+        achieved_at: achievedDate.toISOString(),
+      }, {
+        onConflict: 'user_id,goal_id,achieved_date',
+        ignoreDuplicates: true,
+      });
+    } catch (error) {
+      console.error('Error saving certificate:', error);
+    }
+    
     setCertificateData({
       sellerName: userName,
       goalTitle: goal.title,
-      goalValue: formatValue(goal.target_value, goal.unit),
-      achievedDate: new Date(),
+      goalValue: goalValueFormatted,
+      achievedDate,
       periodType: goal.period_type,
     });
     setCertificateDialogOpen(true);
