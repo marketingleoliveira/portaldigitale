@@ -101,6 +101,7 @@ export type Database = {
           file_type: string | null
           file_url: string
           id: string
+          is_external_link: boolean
           name: string
           subcategory_id: string | null
           updated_at: string | null
@@ -114,6 +115,7 @@ export type Database = {
           file_type?: string | null
           file_url: string
           id?: string
+          is_external_link?: boolean
           name: string
           subcategory_id?: string | null
           updated_at?: string | null
@@ -127,6 +129,7 @@ export type Database = {
           file_type?: string | null
           file_url?: string
           id?: string
+          is_external_link?: boolean
           name?: string
           subcategory_id?: string | null
           updated_at?: string | null
