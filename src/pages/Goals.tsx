@@ -89,7 +89,23 @@ const periodColors: Record<string, string> = {
   yearly: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
 };
 
+const unitOptions = [
+  { value: 'unidades', label: 'Unidades' },
+  { value: 'R$', label: 'Financeiro (R$)' },
+  { value: 'peças', label: 'Peças' },
+  { value: 'kg', label: 'Quilogramas (kg)' },
+  { value: '%', label: 'Porcentagem (%)' },
+];
+
 const allRoles: AppRole[] = ['dev', 'admin', 'gerente', 'vendedor'];
+
+// Format value based on unit type
+const formatValue = (value: number, unit: string): string => {
+  if (unit === 'R$') {
+    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+  return `${value.toLocaleString('pt-BR')} ${unit}`;
+};
 
 const Goals: React.FC = () => {
   const { user } = useAuth();
@@ -678,12 +694,11 @@ const Goals: React.FC = () => {
                         </div>
                       </CardHeader>
                       <CardContent>
-                        {/* User's own progress */}
                         <div className="space-y-3">
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">Seu progresso</span>
                             <span className="font-semibold">
-                              {currentProgress.toLocaleString('pt-BR')} / {goal.target_value.toLocaleString('pt-BR')} {goal.unit}
+                              {formatValue(currentProgress, goal.unit)} / {formatValue(goal.target_value, goal.unit)}
                             </span>
                           </div>
                           <Progress value={percentage} className="h-3" />
@@ -742,7 +757,7 @@ const Goals: React.FC = () => {
                                           userAchieved ? 'text-green-500' : ''
                                         }`}
                                       >
-                                        {up.value.toLocaleString('pt-BR')} ({userPercentage}%)
+                                        {formatValue(up.value, goal.unit)} ({userPercentage}%)
                                       </span>
                                       {isDev && (
                                         <Button
@@ -813,20 +828,36 @@ const Goals: React.FC = () => {
                 <Input
                   id="target_value"
                   type="number"
+                  max={999000000}
+                  step="0.01"
                   value={formData.target_value}
                   onChange={e => setFormData({ ...formData, target_value: e.target.value })}
-                  placeholder="100"
+                  placeholder="Ex: 1000000"
                 />
+                {formData.target_value && (
+                  <p className="text-xs text-muted-foreground">
+                    {formatValue(parseFloat(formData.target_value) || 0, formData.unit)}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="unit">Unidade</Label>
-                <Input
-                  id="unit"
+                <Label htmlFor="unit">Tipo de Unidade</Label>
+                <Select
                   value={formData.unit}
-                  onChange={e => setFormData({ ...formData, unit: e.target.value })}
-                  placeholder="unidades"
-                />
+                  onValueChange={(value) => setFormData({ ...formData, unit: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {unitOptions.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
