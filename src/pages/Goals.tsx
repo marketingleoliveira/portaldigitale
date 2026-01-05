@@ -65,6 +65,7 @@ interface UserProfile {
   full_name: string;
   avatar_url: string | null;
   region: string | null;
+  role?: AppRole | null;
 }
 
 interface SellerRanking {
@@ -158,14 +159,26 @@ const Goals: React.FC = () => {
       if (progressError) throw progressError;
       setProgress(progressData || []);
 
-      // Fetch users - always fetch for ranking
+      // Fetch users with roles - always fetch for ranking
       const { data: usersData, error: usersError } = await supabase
         .from('profiles')
         .select('id, full_name, avatar_url, region')
         .eq('is_active', true);
 
       if (usersError) throw usersError;
-      setUsers(usersData || []);
+
+      // Fetch user roles
+      const { data: rolesData } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+
+      // Merge roles into users
+      const usersWithRoles = (usersData || []).map(u => ({
+        ...u,
+        role: rolesData?.find(r => r.user_id === u.id)?.role || null,
+      }));
+
+      setUsers(usersWithRoles);
     } catch (error: any) {
       console.error('Error fetching goals:', error);
       toast.error('Erro ao carregar metas');
@@ -428,7 +441,17 @@ const Goals: React.FC = () => {
   }, [goals, selectedTab]);
 
   const teamGoals = useMemo(() => filteredGoals.filter(g => g.goal_type === 'team'), [filteredGoals]);
-  const individualGoals = useMemo(() => filteredGoals.filter(g => g.goal_type === 'individual'), [filteredGoals]);
+  
+  // Metas individuais: DEV vê todas, demais usuários veem apenas as suas próprias
+  const individualGoals = useMemo(() => {
+    return filteredGoals.filter(g => {
+      if (g.goal_type !== 'individual') return false;
+      // DEV pode ver todas as metas individuais
+      if (isDev) return true;
+      // Outros usuários só veem suas próprias metas individuais
+      return g.target_user_id === user?.id;
+    });
+  }, [filteredGoals, isDev, user?.id]);
 
   const stats = useMemo(() => {
     const totalGoals = goals.length;
@@ -441,11 +464,14 @@ const Goals: React.FC = () => {
     return { totalGoals, achievedGoals, inProgressGoals };
   }, [goals, progress]);
 
-  // Calculate seller ranking
+  // Calculate seller ranking - somente vendedores aparecem no ranking
   const sellerRanking = useMemo((): SellerRanking[] => {
     if (goals.length === 0 || users.length === 0) return [];
 
-    const rankings: SellerRanking[] = users.map(userProfile => {
+    // Filtrar apenas usuários com role 'vendedor'
+    const vendedores = users.filter(u => u.role === 'vendedor');
+
+    const rankings: SellerRanking[] = vendedores.map(userProfile => {
       let totalProgress = 0;
       let totalTargets = 0;
       let goalsAchieved = 0;
