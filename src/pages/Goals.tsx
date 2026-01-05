@@ -444,6 +444,32 @@ const Goals: React.FC = () => {
     }
   };
 
+  const handleDeleteUserProgress = async (goalId: string, userId: string) => {
+    if (!confirm('Tem certeza que deseja excluir o progresso deste usuário nesta meta?')) return;
+
+    try {
+      const goal = goals.find(g => g.id === goalId);
+      if (!goal) return;
+
+      const { start } = getPeriodDates(goal.period_type);
+      const periodStart = format(start, 'yyyy-MM-dd');
+
+      const { error } = await supabase
+        .from('goal_progress')
+        .delete()
+        .eq('goal_id', goalId)
+        .eq('user_id', userId)
+        .eq('period_start', periodStart);
+
+      if (error) throw error;
+      toast.success('Progresso do usuário excluído com sucesso!');
+      fetchData();
+    } catch (error: any) {
+      console.error('Error deleting user progress:', error);
+      toast.error('Erro ao excluir progresso');
+    }
+  };
+
   const handleOpenCertificate = async (goal: Goal, userName: string) => {
     const achievedDate = new Date();
     const goalValueFormatted = formatValue(goal.target_value, goal.unit);
@@ -811,14 +837,24 @@ const Goals: React.FC = () => {
                                             {formatValue(up.value, goal.unit)} ({userPercentage}%)
                                           </span>
                                           {isDev && (
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-5 w-5"
-                                              onClick={() => handleOpenProgressDialog(goal, up.userId)}
-                                            >
-                                              <Edit className="w-3 h-3" />
-                                            </Button>
+                                            <div className="flex gap-1">
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-5 w-5"
+                                                onClick={() => handleOpenProgressDialog(goal, up.userId)}
+                                              >
+                                                <Edit className="w-3 h-3" />
+                                              </Button>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-5 w-5"
+                                                onClick={() => handleDeleteUserProgress(goal.id, up.userId)}
+                                              >
+                                                <Trash2 className="w-3 h-3 text-destructive" />
+                                              </Button>
+                                            </div>
                                           )}
                                         </div>
                                       </div>
