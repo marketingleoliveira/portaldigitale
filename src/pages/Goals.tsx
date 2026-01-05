@@ -898,37 +898,97 @@ const Goals: React.FC = () => {
                 ) : (
                   <div className="space-y-3">
                     {sellerRanking.slice(0, 15).map((seller, index) => {
+                      const isFirst = index === 0;
+                      const isSecond = index === 1;
+                      const isThird = index === 2;
                       const isTop3 = index < 3;
-                      const medalColors = ['text-yellow-500', 'text-gray-400', 'text-amber-600'];
+                      
+                      // Estilos diferenciados para cada posição do Top 3
+                      const getRankingStyles = () => {
+                        if (isFirst) {
+                          return {
+                            container: 'bg-gradient-to-r from-yellow-500/20 via-amber-400/15 to-yellow-500/20 border-2 border-yellow-500/50 shadow-lg shadow-yellow-500/20 animate-pulse-slow',
+                            badge: 'bg-gradient-to-br from-yellow-400 to-amber-500 shadow-lg shadow-yellow-500/40',
+                            medalColor: 'text-white',
+                            nameColor: 'text-yellow-700 dark:text-yellow-400 font-bold',
+                            percentColor: 'text-yellow-600 dark:text-yellow-400',
+                          };
+                        }
+                        if (isSecond) {
+                          return {
+                            container: 'bg-gradient-to-r from-slate-300/20 via-gray-200/15 to-slate-300/20 border-2 border-slate-400/50 shadow-md shadow-slate-400/15',
+                            badge: 'bg-gradient-to-br from-slate-300 to-gray-400 shadow-md shadow-slate-400/30',
+                            medalColor: 'text-white',
+                            nameColor: 'text-slate-700 dark:text-slate-300 font-semibold',
+                            percentColor: 'text-slate-600 dark:text-slate-400',
+                          };
+                        }
+                        if (isThird) {
+                          return {
+                            container: 'bg-gradient-to-r from-amber-600/15 via-orange-500/10 to-amber-600/15 border-2 border-amber-600/40 shadow-md shadow-amber-600/10',
+                            badge: 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-md shadow-amber-600/30',
+                            medalColor: 'text-white',
+                            nameColor: 'text-amber-700 dark:text-amber-400 font-semibold',
+                            percentColor: 'text-amber-600 dark:text-amber-500',
+                          };
+                        }
+                        return {
+                          container: 'bg-muted/30',
+                          badge: 'bg-muted',
+                          medalColor: '',
+                          nameColor: 'font-medium',
+                          percentColor: '',
+                        };
+                      };
+                      
+                      const styles = getRankingStyles();
                       
                       return (
                         <div
                           key={seller.userId}
-                          className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                            isTop3 ? 'bg-primary/5 border border-primary/20' : 'bg-muted/30'
+                          className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-300 hover:scale-[1.02] ${styles.container} ${
+                            isFirst ? 'relative overflow-hidden' : ''
                           }`}
+                          style={{
+                            animationDelay: `${index * 100}ms`,
+                          }}
                         >
-                          <div className={`w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-full ${
-                            isTop3 ? 'bg-primary/20' : 'bg-muted'
-                          }`}>
+                          {/* Efeito de brilho para o primeiro lugar */}
+                          {isFirst && (
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-400/20 to-transparent animate-shimmer" />
+                          )}
+                          
+                          <div className={`w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-full ${styles.badge} ${
+                            isTop3 ? 'ring-2 ring-offset-2 ring-offset-background' : ''
+                          } ${isFirst ? 'ring-yellow-400 animate-bounce-slow' : ''} ${isSecond ? 'ring-slate-400' : ''} ${isThird ? 'ring-amber-500' : ''}`}>
                             {isTop3 ? (
-                              <Medal className={`w-4 h-4 ${medalColors[index]}`} />
+                              <div className="relative">
+                                <Medal className={`w-5 h-5 ${styles.medalColor}`} />
+                                {isFirst && (
+                                  <Crown className="w-3 h-3 text-yellow-300 absolute -top-2 left-1/2 -translate-x-1/2 animate-bounce" />
+                                )}
+                              </div>
                             ) : (
                               <span className="text-sm font-medium text-muted-foreground">
                                 {index + 1}
                               </span>
                             )}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{seller.userName}</p>
+                          <div className="flex-1 min-w-0 relative z-10">
+                            <p className={`text-sm truncate ${styles.nameColor}`}>
+                              {seller.userName}
+                              {isFirst && <span className="ml-2">🏆</span>}
+                              {isSecond && <span className="ml-2">🥈</span>}
+                              {isThird && <span className="ml-2">🥉</span>}
+                            </p>
                             {seller.region && (
                               <p className="text-xs text-muted-foreground">
                                 {seller.region}
                               </p>
                             )}
                           </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-sm font-semibold">
+                          <div className="text-right flex-shrink-0 relative z-10">
+                            <p className={`text-sm font-bold ${styles.percentColor}`}>
                               {seller.percentage}%
                             </p>
                             <p className="text-xs text-muted-foreground">
