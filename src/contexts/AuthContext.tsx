@@ -28,23 +28,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [userDataLoading, setUserDataLoading] = useState(false);
+  const [userDataFetched, setUserDataFetched] = useState(false);
 
   const fetchUserData = useCallback(async (authUser: User, isLogin: boolean = false) => {
     setUserDataLoading(true);
+    setUserDataFetched(false);
     try {
-      // Fetch profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .maybeSingle();
+      // Fetch profile with retry logic
+      let profile = null;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (!profile && retryCount < maxRetries) {
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authUser.id)
+          .maybeSingle();
+        
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+        }
+        
+        profile = profileData;
+        
+        if (!profile && retryCount < maxRetries - 1) {
+          // Wait a bit before retrying (profile might not be created yet for new users)
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        retryCount++;
+      }
 
       // Fetch role
-      const { data: roleData } = await supabase
+      const { data: roleData, error: roleError } = await supabase
         .from('user_roles')
         .select('role')
         .eq('user_id', authUser.id)
         .maybeSingle();
+
+      if (roleError) {
+        console.error('Error fetching role:', roleError);
+      }
 
       const authUserData: AuthUser = {
         id: authUser.id,
@@ -57,13 +81,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Log access with IP only on login
       if (isLogin && profile) {
-        const ipAddress = await getIpAddress();
-        await supabase.from('access_logs').insert({
-          user_id: authUser.id,
-          action: 'login',
-          resource_type: 'session',
-          ip_address: ipAddress,
-        });
+        try {
+          const ipAddress = await getIpAddress();
+          await supabase.from('access_logs').insert({
+            user_id: authUser.id,
+            action: 'login',
+            resource_type: 'session',
+            ip_address: ipAddress,
+          });
+        } catch (logError) {
+          console.error('Error logging access:', logError);
+        }
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -76,6 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     } finally {
       setUserDataLoading(false);
+      setUserDataFetched(true);
     }
   }, []);
 
@@ -148,8 +177,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: error as Error | null };
   };
 
-  // Combined loading state
-  const isLoading = loading || userDataLoading;
+  // Combined loading state - only show loading until initial data fetch is complete
+  const isLoading = loading || (session?.user && !userDataFetched);
 
   return (
     <AuthContext.Provider value={{ user, session, loading: isLoading, signIn, signOut, updatePassword }}>
