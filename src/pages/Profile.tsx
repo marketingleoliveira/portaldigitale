@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import RoleBadge from '@/components/RoleBadge';
+import ProfileCertificates from '@/components/ProfileCertificates';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Lock, Mail, Phone, Loader2, Pencil, Check, X, Camera } from 'lucide-react';
@@ -313,6 +314,9 @@ const Profile: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Certificates */}
+        <ProfileCertificates />
 
         {/* Change Password */}
         <Card>

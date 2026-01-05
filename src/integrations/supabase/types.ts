@@ -44,6 +44,50 @@ export type Database = {
         }
         Relationships: []
       }
+      achieved_certificates: {
+        Row: {
+          achieved_at: string
+          achieved_date: string
+          created_at: string
+          goal_id: string
+          goal_title: string
+          goal_value: string
+          id: string
+          period_type: string
+          user_id: string
+        }
+        Insert: {
+          achieved_at?: string
+          achieved_date?: string
+          created_at?: string
+          goal_id: string
+          goal_title: string
+          goal_value: string
+          id?: string
+          period_type: string
+          user_id: string
+        }
+        Update: {
+          achieved_at?: string
+          achieved_date?: string
+          created_at?: string
+          goal_id?: string
+          goal_title?: string
+          goal_value?: string
+          id?: string
+          period_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "achieved_certificates_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           created_at: string | null
