@@ -727,11 +727,11 @@ const Goals: React.FC = () => {
                                   {percentage}% completo
                                 </span>
                                 <div className="flex items-center gap-2">
-                                  {isAchieved && user?.full_name && (
+                                  {isAchieved && user?.profile?.full_name && (
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => handleOpenCertificate(goal, user.full_name)}
+                                      onClick={() => handleOpenCertificate(goal, user.profile!.full_name)}
                                       className="gap-1 h-7 text-xs bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border-yellow-500/30 hover:border-yellow-500/50 text-yellow-700 dark:text-yellow-400"
                                     >
                                       <Award className="w-3 h-3" />
