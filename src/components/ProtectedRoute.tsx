@@ -13,6 +13,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
   const { user, loading } = useAuth();
   const location = useLocation();
 
+  // Show loading while auth or user data is being fetched
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -21,11 +22,22 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     );
   }
 
+  // Not authenticated
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (!user.profile?.is_active) {
+  // User exists but profile not yet loaded - show loading
+  if (!user.profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // User not active - awaiting approval
+  if (!user.profile.is_active) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
         <div className="text-center max-w-md">
@@ -44,12 +56,17 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     );
   }
 
-  // DEV has full access like admin
+  // Role-based access check (DEV has full access)
   if (allowedRoles && user.role) {
     const hasAccess = allowedRoles.includes(user.role) || user.role === 'dev';
     if (!hasAccess) {
       return <Navigate to="/dashboard" replace />;
     }
+  }
+
+  // If role check required but user has no role, redirect to dashboard
+  if (allowedRoles && !user.role) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;

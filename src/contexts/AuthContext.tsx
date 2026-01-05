@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { AppRole, UserProfile, AuthUser } from '@/types/auth';
@@ -27,8 +27,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userDataLoading, setUserDataLoading] = useState(false);
 
-  const fetchUserData = async (authUser: User) => {
+  const fetchUserData = useCallback(async (authUser: User, isLogin: boolean = false) => {
+    setUserDataLoading(true);
     try {
       // Fetch profile
       const { data: profile } = await supabase
@@ -53,8 +55,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setUser(authUserData);
 
-      // Log access with IP
-      if (profile) {
+      // Log access with IP only on login
+      if (isLogin && profile) {
         const ipAddress = await getIpAddress();
         await supabase.from('access_logs').insert({
           user_id: authUser.id,
@@ -65,41 +67,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
+      // Still set a basic user object to prevent blank screens
+      setUser({
+        id: authUser.id,
+        email: authUser.email || '',
+        profile: null,
+        role: null,
+      });
+    } finally {
+      setUserDataLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
+    // Check for existing session first
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted) return;
+      
+      setSession(session);
+      
+      if (session?.user) {
+        fetchUserData(session.user, false).finally(() => {
+          if (isMounted) setLoading(false);
+        });
+      } else {
+        setLoading(false);
+      }
+    });
+
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (!isMounted) return;
+        
         setSession(session);
         
         if (session?.user) {
-          // Defer Supabase calls with setTimeout
+          // Only log IP on actual sign in events
+          const isLogin = event === 'SIGNED_IN';
           setTimeout(() => {
-            fetchUserData(session.user);
+            fetchUserData(session.user, isLogin);
           }, 0);
         } else {
           setUser(null);
         }
         
-        setLoading(false);
+        // Only set loading false if not already handled
+        if (!session?.user) {
+          setLoading(false);
+        }
       }
     );
 
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      
-      if (session?.user) {
-        fetchUserData(session.user);
-      }
-      
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [fetchUserData]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -122,8 +148,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error: error as Error | null };
   };
 
+  // Combined loading state
+  const isLoading = loading || userDataLoading;
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signOut, updatePassword }}>
+    <AuthContext.Provider value={{ user, session, loading: isLoading, signIn, signOut, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );
