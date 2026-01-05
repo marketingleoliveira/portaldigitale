@@ -30,7 +30,9 @@ import {
   HelpCircle,
   TicketIcon,
   Loader2,
+  Clock,
 } from 'lucide-react';
+import { useTimeClockReminder } from '@/hooks/useTimeClockReminder';
 import { cn } from '@/lib/utils';
 import NotificationBanner from '@/components/NotificationBanner';
 import PersistentNotificationAlert from '@/components/PersistentNotificationAlert';
@@ -55,6 +57,7 @@ const navItems: NavItem[] = [
   { label: 'Arquivos', href: '/arquivos', icon: Upload, roles: ['dev', 'admin'] },
   { label: 'Relatórios', href: '/relatorios', icon: BarChart3, roles: ['dev', 'admin', 'gerente'] },
   { label: 'Materiais Comerciais', href: '/downloads', icon: FileText, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
+  { label: 'Ponto', href: '/ponto', icon: Clock, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Notificações', href: '/notificacoes', icon: Bell, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Tickets', href: '/tickets', icon: TicketIcon, roles: ['dev', 'admin', 'gerente', 'vendedor'], highlight: true },
   { label: 'Ajuda', href: '/ajuda', icon: HelpCircle, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
@@ -69,6 +72,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Time clock reminder alerts
+  useTimeClockReminder();
   
   const {
     unreadCount,

@@ -422,6 +422,42 @@ export type Database = {
         }
         Relationships: []
       }
+      time_records: {
+        Row: {
+          created_at: string | null
+          entry_time: string | null
+          exit_time: string | null
+          id: string
+          lunch_exit_time: string | null
+          lunch_return_time: string | null
+          record_date: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          entry_time?: string | null
+          exit_time?: string | null
+          id?: string
+          lunch_exit_time?: string | null
+          lunch_return_time?: string | null
+          record_date?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          entry_time?: string | null
+          exit_time?: string | null
+          id?: string
+          lunch_exit_time?: string | null
+          lunch_return_time?: string | null
+          record_date?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_notifications: {
         Row: {
           created_at: string | null
