@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { hasFullAccess, AppRole } from '@/types/auth';
+import MeritCertificate from '@/components/MeritCertificate';
 import {
   Target,
   Plus,
@@ -30,6 +31,7 @@ import {
   Minus,
   Medal,
   Crown,
+  Award,
 } from 'lucide-react';
 import { format, startOfDay, startOfWeek, startOfMonth, startOfYear, endOfDay, endOfWeek, endOfMonth, endOfYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -127,6 +129,16 @@ const Goals: React.FC = () => {
   const [selectedGoalForProgress, setSelectedGoalForProgress] = useState<Goal | null>(null);
   const [selectedUserForProgress, setSelectedUserForProgress] = useState<string>('');
   const [progressValue, setProgressValue] = useState<string>('');
+  
+  // Certificate state
+  const [certificateDialogOpen, setCertificateDialogOpen] = useState(false);
+  const [certificateData, setCertificateData] = useState<{
+    sellerName: string;
+    goalTitle: string;
+    goalValue: string;
+    achievedDate: Date;
+    periodType: string;
+  } | null>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -432,6 +444,17 @@ const Goals: React.FC = () => {
     }
   };
 
+  const handleOpenCertificate = (goal: Goal, userName: string) => {
+    setCertificateData({
+      sellerName: userName,
+      goalTitle: goal.title,
+      goalValue: formatValue(goal.target_value, goal.unit),
+      achievedDate: new Date(),
+      periodType: goal.period_type,
+    });
+    setCertificateDialogOpen(true);
+  };
+
   const filteredGoals = useMemo(() => {
     let filtered = goals;
     if (selectedTab !== 'all') {
@@ -703,17 +726,30 @@ const Goals: React.FC = () => {
                                 >
                                   {percentage}% completo
                                 </span>
-                                {isDev && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleOpenProgressDialog(goal)}
-                                    className="gap-1 h-7 text-xs"
-                                  >
-                                    <TrendingUp className="w-3 h-3" />
-                                    Atualizar
-                                  </Button>
-                                )}
+                                <div className="flex items-center gap-2">
+                                  {isAchieved && user?.full_name && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleOpenCertificate(goal, user.full_name)}
+                                      className="gap-1 h-7 text-xs bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border-yellow-500/30 hover:border-yellow-500/50 text-yellow-700 dark:text-yellow-400"
+                                    >
+                                      <Award className="w-3 h-3" />
+                                      Certificado
+                                    </Button>
+                                  )}
+                                  {isDev && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleOpenProgressDialog(goal)}
+                                      className="gap-1 h-7 text-xs"
+                                    >
+                                      <TrendingUp className="w-3 h-3" />
+                                      Atualizar
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             </div>
 
@@ -878,17 +914,30 @@ const Goals: React.FC = () => {
                                 >
                                   {percentage}% completo
                                 </span>
-                                {isDev && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleOpenProgressDialog(goal, goal.target_user_id || undefined)}
-                                    className="gap-1 h-7 text-xs"
-                                  >
-                                    <TrendingUp className="w-3 h-3" />
-                                    Atualizar
-                                  </Button>
-                                )}
+                                <div className="flex items-center gap-2">
+                                  {isAchieved && targetUser && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleOpenCertificate(goal, targetUser.full_name)}
+                                      className="gap-1 h-7 text-xs bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border-yellow-500/30 hover:border-yellow-500/50 text-yellow-700 dark:text-yellow-400"
+                                    >
+                                      <Award className="w-3 h-3" />
+                                      Certificado
+                                    </Button>
+                                  )}
+                                  {isDev && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleOpenProgressDialog(goal, goal.target_user_id || undefined)}
+                                      className="gap-1 h-7 text-xs"
+                                    >
+                                      <TrendingUp className="w-3 h-3" />
+                                      Atualizar
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </CardContent>
@@ -1279,6 +1328,22 @@ const Goals: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Certificate Dialog */}
+      {certificateData && (
+        <MeritCertificate
+          isOpen={certificateDialogOpen}
+          onClose={() => {
+            setCertificateDialogOpen(false);
+            setCertificateData(null);
+          }}
+          sellerName={certificateData.sellerName}
+          goalTitle={certificateData.goalTitle}
+          goalValue={certificateData.goalValue}
+          achievedDate={certificateData.achievedDate}
+          periodType={certificateData.periodType}
+        />
+      )}
     </DashboardLayout>
   );
 };
