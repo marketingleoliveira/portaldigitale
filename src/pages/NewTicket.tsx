@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,18 +10,131 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { TicketIcon, ArrowLeft, Loader2, Send } from 'lucide-react';
+import { TicketIcon, ArrowLeft, Loader2, Send, Paperclip, X, FileText, Image, Video, Link } from 'lucide-react';
+
+interface AttachmentPreview {
+  file: File;
+  preview: string;
+  type: 'image' | 'video' | 'file';
+}
 
 const NewTicket: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
+  const [attachments, setAttachments] = useState<AttachmentPreview[]>([]);
+  const [linkInput, setLinkInput] = useState('');
+  const [links, setLinks] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     category: 'suporte',
     priority: 'normal',
   });
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    const newAttachments: AttachmentPreview[] = [];
+    
+    Array.from(files).forEach((file) => {
+      const type = file.type.startsWith('image/') 
+        ? 'image' 
+        : file.type.startsWith('video/') 
+          ? 'video' 
+          : 'file';
+      
+      newAttachments.push({
+        file,
+        preview: type === 'image' ? URL.createObjectURL(file) : '',
+        type,
+      });
+    });
+
+    setAttachments(prev => [...prev, ...newAttachments]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const addLink = () => {
+    if (!linkInput.trim()) return;
+    
+    let url = linkInput.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+    
+    setLinks(prev => [...prev, url]);
+    setLinkInput('');
+  };
+
+  const removeLink = (index: number) => {
+    setLinks(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadAttachments = async (ticketId: string) => {
+    const uploadedAttachments: { file_name: string; file_url: string; file_type: string; file_size: number }[] = [];
+
+    for (const attachment of attachments) {
+      const fileExt = attachment.file.name.split('.').pop();
+      const fileName = `${user?.id}/${ticketId}/${Date.now()}-${attachment.file.name}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('ticket-attachments')
+        .upload(fileName, attachment.file);
+
+      if (uploadError) {
+        console.error('Error uploading file:', uploadError);
+        continue;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('ticket-attachments')
+        .getPublicUrl(fileName);
+
+      uploadedAttachments.push({
+        file_name: attachment.file.name,
+        file_url: urlData.publicUrl,
+        file_type: attachment.file.type,
+        file_size: attachment.file.size,
+      });
+    }
+
+    // Also save links as attachments
+    for (const link of links) {
+      uploadedAttachments.push({
+        file_name: link,
+        file_url: link,
+        file_type: 'link',
+        file_size: 0,
+      });
+    }
+
+    // Insert all attachments to the database
+    if (uploadedAttachments.length > 0) {
+      const { error } = await supabase
+        .from('ticket_attachments')
+        .insert(
+          uploadedAttachments.map(att => ({
+            ticket_id: ticketId,
+            file_name: att.file_name,
+            file_url: att.file_url,
+            file_type: att.file_type,
+            file_size: att.file_size,
+            created_by: user?.id,
+          }))
+        );
+
+      if (error) {
+        console.error('Error saving attachments:', error);
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +166,11 @@ const NewTicket: React.FC = () => {
 
       if (error) throw error;
 
+      // Upload attachments if any
+      if (attachments.length > 0 || links.length > 0) {
+        await uploadAttachments(data.id);
+      }
+
       toast.success('Chamado criado com sucesso!');
       navigate(`/tickets/${data.id}`);
     } catch (error) {
@@ -61,6 +179,12 @@ const NewTicket: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getFileIcon = (type: string) => {
+    if (type === 'image') return <Image className="w-4 h-4" />;
+    if (type === 'video') return <Video className="w-4 h-4" />;
+    return <FileText className="w-4 h-4" />;
   };
 
   return (
@@ -118,6 +242,7 @@ const NewTicket: React.FC = () => {
                       <SelectItem value="erro">Erro / Bug</SelectItem>
                       <SelectItem value="solicitacao">Solicitação de Melhoria</SelectItem>
                       <SelectItem value="duvida">Dúvida</SelectItem>
+                      <SelectItem value="ponto">Ponto</SelectItem>
                       <SelectItem value="outro">Outro</SelectItem>
                     </SelectContent>
                   </Select>
@@ -154,6 +279,115 @@ const NewTicket: React.FC = () => {
                 />
               </div>
 
+              {/* Attachments Section */}
+              <div className="space-y-4">
+                <Label>Anexos (opcional)</Label>
+                
+                {/* File Upload */}
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="w-4 h-4 mr-2" />
+                    Anexar Arquivo
+                  </Button>
+                </div>
+
+                {/* Attachments Preview */}
+                {attachments.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {attachments.map((att, index) => (
+                      <div
+                        key={index}
+                        className="relative bg-muted rounded-lg p-2 flex items-center gap-2"
+                      >
+                        {att.type === 'image' && att.preview ? (
+                          <img
+                            src={att.preview}
+                            alt={att.file.name}
+                            className="w-10 h-10 object-cover rounded"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-primary/10 rounded flex items-center justify-center">
+                            {getFileIcon(att.type)}
+                          </div>
+                        )}
+                        <span className="flex-1 text-sm truncate">{att.file.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => removeAttachment(index)}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Link Input */}
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Adicionar link (ex: https://exemplo.com)"
+                    value={linkInput}
+                    onChange={(e) => setLinkInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addLink();
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="outline" onClick={addLink}>
+                    <Link className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {/* Links Preview */}
+                {links.length > 0 && (
+                  <div className="space-y-2">
+                    {links.map((link, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-2 bg-muted rounded-lg p-2"
+                      >
+                        <Link className="w-4 h-4 text-primary" />
+                        <a
+                          href={link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 text-sm text-primary hover:underline truncate"
+                        >
+                          {link}
+                        </a>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => removeLink(index)}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-3 justify-end">
                 <Button
                   type="button"
@@ -188,6 +422,7 @@ const NewTicket: React.FC = () => {
             <ul className="text-sm text-muted-foreground space-y-1">
               <li>• Seja específico no título para facilitar a identificação</li>
               <li>• Descreva o problema detalhadamente, incluindo mensagens de erro</li>
+              <li>• Anexe imagens ou vídeos para ilustrar o problema</li>
               <li>• Se for um erro, informe os passos para reproduzi-lo</li>
               <li>• Escolha a prioridade correta (urgente apenas para casos críticos)</li>
             </ul>

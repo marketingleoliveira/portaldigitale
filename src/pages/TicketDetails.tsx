@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +20,14 @@ import {
   AlertCircle, 
   XCircle,
   User,
-  Shield
+  Shield,
+  Paperclip,
+  Image,
+  Video,
+  FileText,
+  Link as LinkIcon,
+  ExternalLink,
+  Download
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -46,16 +53,30 @@ interface TicketMessage {
   created_at: string;
 }
 
+interface TicketAttachment {
+  id: string;
+  ticket_id: string;
+  message_id: string | null;
+  file_name: string;
+  file_url: string;
+  file_type: string | null;
+  file_size: number | null;
+  created_at: string;
+}
+
 const TicketDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [messages, setMessages] = useState<TicketMessage[]>([]);
+  const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   const isAdmin = hasFullAccess(user?.role);
 
@@ -63,6 +84,7 @@ const TicketDetails: React.FC = () => {
     if (id) {
       fetchTicket();
       fetchMessages();
+      fetchAttachments();
     }
   }, [id]);
 
@@ -100,24 +122,88 @@ const TicketDetails: React.FC = () => {
     }
   };
 
+  const fetchAttachments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('ticket_attachments')
+        .select('*')
+        .eq('ticket_id', id)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setAttachments(data || []);
+    } catch (error) {
+      console.error('Error fetching attachments:', error);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    setSelectedFiles(prev => [...prev, ...Array.from(files)]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeSelectedFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadMessageAttachments = async (messageId: string) => {
+    for (const file of selectedFiles) {
+      const fileName = `${user?.id}/${id}/${Date.now()}-${file.name}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('ticket-attachments')
+        .upload(fileName, file);
+
+      if (uploadError) {
+        console.error('Error uploading file:', uploadError);
+        continue;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('ticket-attachments')
+        .getPublicUrl(fileName);
+
+      await supabase.from('ticket_attachments').insert({
+        ticket_id: id,
+        message_id: messageId,
+        file_name: file.name,
+        file_url: urlData.publicUrl,
+        file_type: file.type,
+        file_size: file.size,
+        created_by: user?.id,
+      });
+    }
+  };
+
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !user?.id || !id) return;
+    if ((!newMessage.trim() && selectedFiles.length === 0) || !user?.id || !id) return;
 
     setSending(true);
     try {
-      const { error } = await supabase
+      const { data: msgData, error } = await supabase
         .from('ticket_messages')
         .insert({
           ticket_id: id,
           user_id: user.id,
-          message: newMessage.trim(),
+          message: newMessage.trim() || '(Anexo)',
           is_admin_reply: isAdmin,
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
+      // Upload attachments if any
+      if (selectedFiles.length > 0 && msgData) {
+        await uploadMessageAttachments(msgData.id);
+      }
+
       setNewMessage('');
+      setSelectedFiles([]);
       fetchMessages();
+      fetchAttachments();
       toast.success('Mensagem enviada');
     } catch (error) {
       console.error('Error sending message:', error);
@@ -191,9 +277,81 @@ const TicketDetails: React.FC = () => {
       erro: 'Erro/Bug',
       solicitacao: 'Solicitação',
       duvida: 'Dúvida',
+      ponto: 'Ponto',
       outro: 'Outro',
     };
     return categories[category] || category;
+  };
+
+  const getAttachmentIcon = (fileType: string | null) => {
+    if (!fileType || fileType === 'link') return <LinkIcon className="w-4 h-4" />;
+    if (fileType.startsWith('image/')) return <Image className="w-4 h-4" />;
+    if (fileType.startsWith('video/')) return <Video className="w-4 h-4" />;
+    return <FileText className="w-4 h-4" />;
+  };
+
+  const renderAttachment = (attachment: TicketAttachment) => {
+    const isLink = attachment.file_type === 'link';
+    const isImage = attachment.file_type?.startsWith('image/');
+    const isVideo = attachment.file_type?.startsWith('video/');
+
+    if (isLink) {
+      return (
+        <a
+          href={attachment.file_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 text-primary hover:underline"
+        >
+          <LinkIcon className="w-4 h-4" />
+          <span className="truncate max-w-[200px]">{attachment.file_name}</span>
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      );
+    }
+
+    if (isImage) {
+      return (
+        <a href={attachment.file_url} target="_blank" rel="noopener noreferrer">
+          <img
+            src={attachment.file_url}
+            alt={attachment.file_name}
+            className="max-w-[200px] max-h-[150px] rounded-lg object-cover hover:opacity-90 transition"
+          />
+        </a>
+      );
+    }
+
+    if (isVideo) {
+      return (
+        <video
+          src={attachment.file_url}
+          controls
+          className="max-w-[300px] max-h-[200px] rounded-lg"
+        />
+      );
+    }
+
+    return (
+      <a
+        href={attachment.file_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 p-2 bg-muted rounded-lg hover:bg-muted/80 transition"
+      >
+        {getAttachmentIcon(attachment.file_type)}
+        <span className="truncate max-w-[150px] text-sm">{attachment.file_name}</span>
+        <Download className="w-4 h-4" />
+      </a>
+    );
+  };
+
+  // Get attachments for ticket (not linked to a message)
+  const ticketAttachments = attachments.filter(a => !a.message_id);
+  
+  // Get attachments for a specific message
+  const getMessageAttachments = (messageId: string) => {
+    return attachments.filter(a => a.message_id === messageId);
   };
 
   if (loading) {
@@ -263,6 +421,20 @@ const TicketDetails: React.FC = () => {
               <p className="whitespace-pre-wrap">{ticket.description}</p>
             </div>
 
+            {/* Ticket Attachments */}
+            {ticketAttachments.length > 0 && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Anexos</p>
+                <div className="flex flex-wrap gap-3">
+                  {ticketAttachments.map((att) => (
+                    <div key={att.id}>
+                      {renderAttachment(att)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Admin Controls */}
             {isAdmin && (
               <div className="pt-4 border-t">
@@ -302,35 +474,48 @@ const TicketDetails: React.FC = () => {
               </p>
             ) : (
               <div className="space-y-4 mb-6">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex gap-3 ${msg.is_admin_reply ? 'flex-row-reverse' : ''}`}
-                  >
-                    <div className={`p-2 rounded-full ${msg.is_admin_reply ? 'bg-primary/10' : 'bg-muted'}`}>
-                      {msg.is_admin_reply ? (
-                        <Shield className="w-4 h-4 text-primary" />
-                      ) : (
-                        <User className="w-4 h-4 text-muted-foreground" />
-                      )}
-                    </div>
-                    <div className={`flex-1 max-w-[80%] ${msg.is_admin_reply ? 'text-right' : ''}`}>
-                      <div
-                        className={`inline-block p-3 rounded-lg ${
-                          msg.is_admin_reply
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted'
-                        }`}
-                      >
-                        <p className="whitespace-pre-wrap">{msg.message}</p>
+                {messages.map((msg) => {
+                  const msgAttachments = getMessageAttachments(msg.id);
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex gap-3 ${msg.is_admin_reply ? 'flex-row-reverse' : ''}`}
+                    >
+                      <div className={`p-2 rounded-full ${msg.is_admin_reply ? 'bg-primary/10' : 'bg-muted'}`}>
+                        {msg.is_admin_reply ? (
+                          <Shield className="w-4 h-4 text-primary" />
+                        ) : (
+                          <User className="w-4 h-4 text-muted-foreground" />
+                        )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {format(new Date(msg.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
-                        {msg.is_admin_reply && ' • Suporte'}
-                      </p>
+                      <div className={`flex-1 max-w-[80%] ${msg.is_admin_reply ? 'text-right' : ''}`}>
+                        <div
+                          className={`inline-block p-3 rounded-lg ${
+                            msg.is_admin_reply
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted'
+                          }`}
+                        >
+                          <p className="whitespace-pre-wrap">{msg.message}</p>
+                        </div>
+                        {/* Message Attachments */}
+                        {msgAttachments.length > 0 && (
+                          <div className={`flex flex-wrap gap-2 mt-2 ${msg.is_admin_reply ? 'justify-end' : ''}`}>
+                            {msgAttachments.map((att) => (
+                              <div key={att.id}>
+                                {renderAttachment(att)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {format(new Date(msg.created_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                          {msg.is_admin_reply && ' • Suporte'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -343,10 +528,51 @@ const TicketDetails: React.FC = () => {
                   onChange={(e) => setNewMessage(e.target.value)}
                   rows={3}
                 />
-                <div className="flex justify-end">
+                
+                {/* File Input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                
+                {/* Selected Files Preview */}
+                {selectedFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedFiles.map((file, index) => (
+                      <div key={index} className="flex items-center gap-2 bg-muted rounded-lg px-3 py-1.5">
+                        <Paperclip className="w-3 h-3" />
+                        <span className="text-sm truncate max-w-[150px]">{file.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => removeSelectedFile(index)}
+                        >
+                          <XCircle className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex justify-between">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="w-4 h-4 mr-2" />
+                    Anexar
+                  </Button>
                   <Button
                     onClick={handleSendMessage}
-                    disabled={sending || !newMessage.trim()}
+                    disabled={sending || (!newMessage.trim() && selectedFiles.length === 0)}
                   >
                     {sending ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
