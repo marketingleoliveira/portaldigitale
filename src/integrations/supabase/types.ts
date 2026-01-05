@@ -144,6 +144,92 @@ export type Database = {
           },
         ]
       }
+      goal_progress: {
+        Row: {
+          current_value: number
+          goal_id: string
+          id: string
+          notes: string | null
+          period_end: string
+          period_start: string
+          updated_at: string | null
+          updated_by: string | null
+          user_id: string
+        }
+        Insert: {
+          current_value?: number
+          goal_id: string
+          id?: string
+          notes?: string | null
+          period_end: string
+          period_start: string
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id: string
+        }
+        Update: {
+          current_value?: number
+          goal_id?: string
+          id?: string
+          notes?: string | null
+          period_end?: string
+          period_start?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_progress_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goals: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          period_type: string
+          target_value: number
+          title: string
+          unit: string
+          updated_at: string | null
+          visible_to_roles: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          period_type: string
+          target_value: number
+          title: string
+          unit?: string
+          updated_at?: string | null
+          visible_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          period_type?: string
+          target_value?: number
+          title?: string
+          unit?: string
+          updated_at?: string | null
+          visible_to_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Relationships: []
+      }
       notification_reads: {
         Row: {
           id: string
