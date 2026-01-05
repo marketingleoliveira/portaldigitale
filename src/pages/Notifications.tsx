@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Bell, Plus, Loader2, Users, User } from 'lucide-react';
+import { Bell, Plus, Loader2, Users, User, Trash2 } from 'lucide-react';
 
 interface UserProfile {
   id: string;
@@ -56,6 +56,7 @@ const Notifications: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [notificationType, setNotificationType] = useState<'group' | 'individual'>('group');
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const [newNotification, setNewNotification] = useState({
     title: '',
@@ -65,6 +66,7 @@ const Notifications: React.FC = () => {
   });
 
   const canCreateNotifications = isManagerOrAbove(user?.role);
+  const isDev = user?.role === 'dev';
 
   useEffect(() => {
     fetchNotifications();
@@ -189,6 +191,59 @@ const Notifications: React.FC = () => {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteNotification = async (id: string, type: 'group' | 'individual') => {
+    if (!confirm('Tem certeza que deseja excluir esta notificação?')) return;
+
+    setDeleting(id);
+    try {
+      if (type === 'group') {
+        // First delete related notification reads
+        await supabase
+          .from('notification_reads')
+          .delete()
+          .eq('notification_id', id);
+
+        // Then delete the notification
+        const { error } = await supabase
+          .from('notifications')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+      } else {
+        // First delete related notification reads
+        await supabase
+          .from('notification_reads')
+          .delete()
+          .eq('user_notification_id', id);
+
+        // Then delete the user notification
+        const { error } = await supabase
+          .from('user_notifications')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+      }
+
+      toast({
+        title: 'Sucesso',
+        description: 'Notificação excluída',
+      });
+
+      fetchNotifications();
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      toast({
+        title: 'Erro',
+        description: 'Erro ao excluir notificação',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -383,13 +438,30 @@ const Notifications: React.FC = () => {
                         </CardDescription>
                       </div>
                     </div>
-                    {canCreateNotifications && notification.type === 'group' && (
-                      <div className="flex gap-1 flex-wrap justify-end">
-                        {notification.visible_to_roles.map((role) => (
-                          <RoleBadge key={role} role={role as AppRole} size="sm" showIcon={false} />
-                        ))}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {canCreateNotifications && notification.type === 'group' && (
+                        <div className="flex gap-1 flex-wrap justify-end">
+                          {notification.visible_to_roles.map((role) => (
+                            <RoleBadge key={role} role={role as AppRole} size="sm" showIcon={false} />
+                          ))}
+                        </div>
+                      )}
+                      {isDev && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => handleDeleteNotification(notification.id, notification.type)}
+                          disabled={deleting === notification.id}
+                        >
+                          {deleting === notification.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
