@@ -109,6 +109,36 @@ export type Database = {
         }
         Relationships: []
       }
+      development_updates: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_published: boolean
+          title: string
+          version: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_published?: boolean
+          title: string
+          version?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_published?: boolean
+          title?: string
+          version?: string | null
+        }
+        Relationships: []
+      }
       file_region_visibility: {
         Row: {
           file_id: string

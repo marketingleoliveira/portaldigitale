@@ -32,6 +32,7 @@ import {
   Target,
   Loader2,
   Clock,
+  Rocket,
 } from 'lucide-react';
 import { useTimeClockReminder } from '@/hooks/useTimeClockReminder';
 import { cn } from '@/lib/utils';
@@ -61,6 +62,7 @@ const navItems: NavItem[] = [
   { label: 'Materiais Comerciais', href: '/downloads', icon: FileText, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Notificações', href: '/notificacoes', icon: Bell, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Tickets', href: '/tickets', icon: TicketIcon, roles: ['dev', 'admin', 'gerente', 'vendedor'], highlight: true },
+  { label: 'Atualizações', href: '/atualizacoes', icon: Rocket, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Ajuda', href: '/ajuda', icon: HelpCircle, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
 ];
 
