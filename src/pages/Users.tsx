@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
-import { UserProfile, UserRole, AppRole, ROLE_LABELS, hasFullAccess } from '@/types/auth';
+import { UserProfile, UserRole, AppRole, ROLE_LABELS, hasFullAccess, REGIONS } from '@/types/auth';
 import RoleBadge from '@/components/RoleBadge';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -63,6 +63,7 @@ const userSchema = z.object({
 
 interface UserWithRole extends UserProfile {
   role?: AppRole;
+  region?: string | null;
 }
 
 const Users: React.FC = () => {
@@ -77,6 +78,7 @@ const Users: React.FC = () => {
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
   const [deletingUser, setDeletingUser] = useState<UserWithRole | null>(null);
   const [editRole, setEditRole] = useState<AppRole>('vendedor');
+  const [editRegion, setEditRegion] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -85,6 +87,7 @@ const Users: React.FC = () => {
     email: '',
     phone: '',
     role: 'vendedor' as AppRole,
+    region: '',
   });
 
   useEffect(() => {
@@ -114,6 +117,7 @@ const Users: React.FC = () => {
           return {
             ...profile,
             role: roleData?.role as AppRole | undefined,
+            region: profile.region,
           };
         })
       );
@@ -173,6 +177,13 @@ const Users: React.FC = () => {
           role: newUser.role,
         });
 
+        // Update profile with region if vendedor
+        if (newUser.role === 'vendedor' && newUser.region) {
+          await supabase.from('profiles').update({
+            region: newUser.region,
+          }).eq('id', authData.user.id);
+        }
+
         toast({
           title: 'Usuário criado',
           description: `Senha inicial: ${tempPassword}`,
@@ -184,6 +195,7 @@ const Users: React.FC = () => {
           email: '',
           phone: '',
           role: 'vendedor',
+          region: '',
         });
         fetchUsers();
       }
@@ -255,13 +267,24 @@ const Users: React.FC = () => {
         if (error) throw error;
       }
 
+      // Update region for vendedor
+      const regionValue = editRole === 'vendedor' && editRegion ? editRegion : null;
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ region: regionValue })
+        .eq('id', editingUser.id);
+
+      if (profileError) throw profileError;
+
+      const regionLabel = editRole === 'vendedor' && editRegion ? ` ${editRegion}` : '';
       toast({
         title: 'Sucesso',
-        description: `Cargo atualizado para ${ROLE_LABELS[editRole]}`,
+        description: `Cargo atualizado para ${ROLE_LABELS[editRole]}${regionLabel}`,
       });
 
       setEditDialogOpen(false);
       setEditingUser(null);
+      setEditRegion('');
       fetchUsers();
     } catch (error) {
       toast({
@@ -410,7 +433,7 @@ const Users: React.FC = () => {
                   <Label htmlFor="role">Cargo *</Label>
                   <Select
                     value={newUser.role}
-                    onValueChange={(value) => setNewUser({ ...newUser, role: value as AppRole })}
+                    onValueChange={(value) => setNewUser({ ...newUser, role: value as AppRole, region: '' })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -423,6 +446,29 @@ const Users: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                {newUser.role === 'vendedor' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="region">Região</Label>
+                    <Select
+                      value={newUser.region}
+                      onValueChange={(value) => setNewUser({ ...newUser, region: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a região" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover max-h-60">
+                        {REGIONS.map((region) => (
+                          <SelectItem key={region.value} value={region.value}>
+                            {region.label} ({region.value})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      A região define quais materiais específicos o vendedor poderá acessar
+                    </p>
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
@@ -487,7 +533,7 @@ const Users: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         {u.role ? (
-                          <RoleBadge role={u.role} size="sm" />
+                          <RoleBadge role={u.role} region={u.region} size="sm" />
                         ) : (
                           <Badge variant="outline">Sem cargo</Badge>
                         )}
@@ -510,6 +556,7 @@ const Users: React.FC = () => {
                               onClick={() => {
                                 setEditingUser(u);
                                 setEditRole(u.role || 'vendedor');
+                                setEditRegion(u.region || '');
                                 setEditDialogOpen(true);
                               }}
                             >
@@ -579,7 +626,12 @@ const Users: React.FC = () => {
                 <Label htmlFor="edit-role">Cargo</Label>
                 <Select
                   value={editRole}
-                  onValueChange={(value) => setEditRole(value as AppRole)}
+                  onValueChange={(value) => {
+                    setEditRole(value as AppRole);
+                    if (value !== 'vendedor') {
+                      setEditRegion('');
+                    }
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -592,6 +644,29 @@ const Users: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
+              {editRole === 'vendedor' && (
+                <div className="space-y-2">
+                  <Label htmlFor="edit-region">Região</Label>
+                  <Select
+                    value={editRegion}
+                    onValueChange={(value) => setEditRegion(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a região" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover max-h-60">
+                      {REGIONS.map((region) => (
+                        <SelectItem key={region.value} value={region.value}>
+                          {region.label} ({region.value})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    A região define quais materiais específicos o vendedor poderá acessar
+                  </p>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
