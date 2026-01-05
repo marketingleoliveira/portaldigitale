@@ -12,11 +12,20 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { 
+import {
   BarChart3, Users, Activity, TrendingUp, Loader2, 
   User, Download, LogIn, FileText, ChevronLeft, Calendar,
-  Clock, Globe, Timer, Trash2
+  Clock, Globe, Timer, Trash2, Pencil, Save, X
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -57,6 +66,15 @@ interface TimeRecord {
   exit_time: string | null;
 }
 
+interface EditingTimeRecord {
+  id: string;
+  record_date: string;
+  entry_time: string;
+  lunch_exit_time: string;
+  lunch_return_time: string;
+  exit_time: string;
+}
+
 const Reports: React.FC = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -68,6 +86,9 @@ const Reports: React.FC = () => {
   const [showTimeRecords, setShowTimeRecords] = useState(false);
   const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
   const [loadingTimeRecords, setLoadingTimeRecords] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<EditingTimeRecord | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [stats, setStats] = useState({
     totalLogins: 0,
     uniqueUsers: 0,
@@ -261,6 +282,72 @@ const Reports: React.FC = () => {
       setTimeRecords(prev => prev.filter(r => r.id !== recordId));
     } catch (error) {
       console.error('Error deleting time record:', error);
+    }
+  };
+
+  const extractTimeFromIso = (isoString: string | null): string => {
+    if (!isoString) return '';
+    return format(new Date(isoString), 'HH:mm');
+  };
+
+  const handleOpenEditDialog = (record: TimeRecord) => {
+    setEditingRecord({
+      id: record.id,
+      record_date: record.record_date,
+      entry_time: extractTimeFromIso(record.entry_time),
+      lunch_exit_time: extractTimeFromIso(record.lunch_exit_time),
+      lunch_return_time: extractTimeFromIso(record.lunch_return_time),
+      exit_time: extractTimeFromIso(record.exit_time),
+    });
+    setEditDialogOpen(true);
+  };
+
+  const buildIsoFromTime = (date: string, time: string): string | null => {
+    if (!time) return null;
+    const [hours, minutes] = time.split(':').map(Number);
+    const dateObj = new Date(date + 'T00:00:00');
+    dateObj.setHours(hours, minutes, 0, 0);
+    return dateObj.toISOString();
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingRecord) return;
+    
+    setSavingEdit(true);
+    try {
+      const updateData = {
+        entry_time: buildIsoFromTime(editingRecord.record_date, editingRecord.entry_time),
+        lunch_exit_time: buildIsoFromTime(editingRecord.record_date, editingRecord.lunch_exit_time),
+        lunch_return_time: buildIsoFromTime(editingRecord.record_date, editingRecord.lunch_return_time),
+        exit_time: buildIsoFromTime(editingRecord.record_date, editingRecord.exit_time),
+      };
+
+      const { error } = await supabase
+        .from('time_records')
+        .update(updateData)
+        .eq('id', editingRecord.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setTimeRecords(prev => prev.map(r => 
+        r.id === editingRecord.id 
+          ? { 
+              ...r, 
+              entry_time: updateData.entry_time,
+              lunch_exit_time: updateData.lunch_exit_time,
+              lunch_return_time: updateData.lunch_return_time,
+              exit_time: updateData.exit_time,
+            } 
+          : r
+      ));
+
+      setEditDialogOpen(false);
+      setEditingRecord(null);
+    } catch (error) {
+      console.error('Error updating time record:', error);
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -510,14 +597,24 @@ const Reports: React.FC = () => {
                           </TableCell>
                           {user?.role === 'dev' && (
                             <TableCell className="text-center">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDeleteTimeRecord(record.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              <div className="flex items-center justify-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-primary hover:text-primary hover:bg-primary/10"
+                                  onClick={() => handleOpenEditDialog(record)}
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleDeleteTimeRecord(record.id)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           )}
                         </TableRow>
@@ -764,6 +861,103 @@ const Reports: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Edit Time Record Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-primary" />
+              Editar Registro de Ponto
+            </DialogTitle>
+            <DialogDescription>
+              {editingRecord && (
+                <span className="capitalize">
+                  {format(new Date(editingRecord.record_date + 'T00:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {editingRecord && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="entry_time" className="text-right">
+                  Entrada
+                </Label>
+                <Input
+                  id="entry_time"
+                  type="time"
+                  value={editingRecord.entry_time}
+                  onChange={(e) => setEditingRecord({ ...editingRecord, entry_time: e.target.value })}
+                  className="col-span-3 font-mono"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="lunch_exit_time" className="text-right">
+                  Saída Almoço
+                </Label>
+                <Input
+                  id="lunch_exit_time"
+                  type="time"
+                  value={editingRecord.lunch_exit_time}
+                  onChange={(e) => setEditingRecord({ ...editingRecord, lunch_exit_time: e.target.value })}
+                  className="col-span-3 font-mono"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="lunch_return_time" className="text-right">
+                  Retorno
+                </Label>
+                <Input
+                  id="lunch_return_time"
+                  type="time"
+                  value={editingRecord.lunch_return_time}
+                  onChange={(e) => setEditingRecord({ ...editingRecord, lunch_return_time: e.target.value })}
+                  className="col-span-3 font-mono"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="exit_time" className="text-right">
+                  Saída
+                </Label>
+                <Input
+                  id="exit_time"
+                  type="time"
+                  value={editingRecord.exit_time}
+                  onChange={(e) => setEditingRecord({ ...editingRecord, exit_time: e.target.value })}
+                  className="col-span-3 font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditDialogOpen(false);
+                setEditingRecord(null);
+              }}
+              disabled={savingEdit}
+            >
+              <X className="w-4 h-4 mr-2" />
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={savingEdit}
+            >
+              {savingEdit ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
