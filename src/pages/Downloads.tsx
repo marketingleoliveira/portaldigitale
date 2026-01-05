@@ -1,15 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { FileItem, AppRole, ROLE_LABELS } from '@/types/auth';
-import { FileText, Download, Search, File, Loader2, FolderOpen } from 'lucide-react';
+import { FileItem, AppRole } from '@/types/auth';
+import { 
+  FileText, Download, Search, Loader2, FolderOpen, Eye, X,
+  FileImage, FileVideo, FileAudio, FileSpreadsheet, FileType, File
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAccessLog } from '@/hooks/useAccessLog';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const Downloads: React.FC = () => {
   const { user } = useAuth();
@@ -19,15 +28,12 @@ const Downloads: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
 
   const handleDownload = async (file: FileItem) => {
     try {
-      // Log the download
       await logDownload('file', file.id);
-      
-      // Open the file
       window.open(file.file_url, '_blank');
-      
       toast({
         title: 'Download iniciado',
         description: `Baixando ${file.name}`,
@@ -35,6 +41,10 @@ const Downloads: React.FC = () => {
     } catch (error) {
       console.error('Error during download:', error);
     }
+  };
+
+  const handlePreview = (file: FileItem) => {
+    setPreviewFile(file);
   };
 
   useEffect(() => {
@@ -50,7 +60,6 @@ const Downloads: React.FC = () => {
 
       if (error) throw error;
 
-      // Fetch visibility for each file
       const filesWithVisibility = await Promise.all(
         (filesData || []).map(async (file) => {
           const { data: visibility } = await supabase
@@ -73,7 +82,6 @@ const Downloads: React.FC = () => {
     }
   };
 
-  // Get unique categories from files
   const categories = [...new Set(files.map(f => f.category).filter(Boolean))] as string[];
 
   const filteredFiles = files.filter((file) => {
@@ -91,6 +99,129 @@ const Downloads: React.FC = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const getFileType = (fileType: string | null, fileName: string): 'image' | 'video' | 'audio' | 'pdf' | 'spreadsheet' | 'document' | 'other' => {
+    const type = fileType?.toLowerCase() || '';
+    const name = fileName.toLowerCase();
+    
+    if (type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(name)) return 'image';
+    if (type.startsWith('video/') || /\.(mp4|webm|mov|avi|mkv)$/i.test(name)) return 'video';
+    if (type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|flac)$/i.test(name)) return 'audio';
+    if (type === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
+    if (/\.(xlsx?|csv|ods)$/i.test(name) || type.includes('spreadsheet')) return 'spreadsheet';
+    if (/\.(docx?|odt|rtf|txt)$/i.test(name) || type.includes('document')) return 'document';
+    return 'other';
+  };
+
+  const getFileIcon = (fileType: ReturnType<typeof getFileType>) => {
+    switch (fileType) {
+      case 'image': return <FileImage className="w-5 h-5" />;
+      case 'video': return <FileVideo className="w-5 h-5" />;
+      case 'audio': return <FileAudio className="w-5 h-5" />;
+      case 'pdf': return <FileText className="w-5 h-5" />;
+      case 'spreadsheet': return <FileSpreadsheet className="w-5 h-5" />;
+      case 'document': return <FileType className="w-5 h-5" />;
+      default: return <File className="w-5 h-5" />;
+    }
+  };
+
+  const getPreviewThumbnail = (file: FileItem) => {
+    const fileType = getFileType(file.file_type, file.name);
+    
+    if (fileType === 'image') {
+      return (
+        <img 
+          src={file.file_url} 
+          alt={file.name}
+          className="w-full h-40 object-cover rounded-t-lg"
+          loading="lazy"
+        />
+      );
+    }
+
+    // For PDFs, we could potentially use a PDF preview service, but for now show icon
+    const iconColors: Record<string, string> = {
+      image: 'from-pink-500/20 to-rose-500/20 text-pink-600',
+      video: 'from-purple-500/20 to-violet-500/20 text-purple-600',
+      audio: 'from-green-500/20 to-emerald-500/20 text-green-600',
+      pdf: 'from-red-500/20 to-orange-500/20 text-red-600',
+      spreadsheet: 'from-emerald-500/20 to-teal-500/20 text-emerald-600',
+      document: 'from-blue-500/20 to-indigo-500/20 text-blue-600',
+      other: 'from-gray-500/20 to-slate-500/20 text-gray-600',
+    };
+
+    return (
+      <div className={`w-full h-40 flex items-center justify-center bg-gradient-to-br ${iconColors[fileType]} rounded-t-lg`}>
+        <div className="p-6 rounded-2xl bg-background/80 backdrop-blur">
+          {React.cloneElement(getFileIcon(fileType), { className: 'w-12 h-12' })}
+        </div>
+      </div>
+    );
+  };
+
+  const canPreviewInBrowser = (file: FileItem): boolean => {
+    const fileType = getFileType(file.file_type, file.name);
+    return ['image', 'video', 'audio', 'pdf'].includes(fileType);
+  };
+
+  const renderPreviewContent = (file: FileItem) => {
+    const fileType = getFileType(file.file_type, file.name);
+
+    switch (fileType) {
+      case 'image':
+        return (
+          <img 
+            src={file.file_url} 
+            alt={file.name}
+            className="max-w-full max-h-[70vh] object-contain mx-auto rounded-lg"
+          />
+        );
+      case 'video':
+        return (
+          <video 
+            src={file.file_url} 
+            controls 
+            className="max-w-full max-h-[70vh] mx-auto rounded-lg"
+          >
+            Seu navegador não suporta a reprodução de vídeo.
+          </video>
+        );
+      case 'audio':
+        return (
+          <div className="flex flex-col items-center gap-6 py-12">
+            <div className="p-8 rounded-full bg-gradient-to-br from-green-500/20 to-emerald-500/20">
+              <FileAudio className="w-16 h-16 text-green-600" />
+            </div>
+            <audio src={file.file_url} controls className="w-full max-w-md">
+              Seu navegador não suporta a reprodução de áudio.
+            </audio>
+          </div>
+        );
+      case 'pdf':
+        return (
+          <iframe 
+            src={file.file_url} 
+            className="w-full h-[70vh] rounded-lg border"
+            title={file.name}
+          />
+        );
+      default:
+        return (
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
+            <div className="p-6 rounded-full bg-muted">
+              {getFileIcon(fileType)}
+            </div>
+            <p className="text-muted-foreground">
+              Prévia não disponível para este tipo de arquivo.
+            </p>
+            <Button onClick={() => handleDownload(file)}>
+              <Download className="w-4 h-4 mr-2" />
+              Fazer Download
+            </Button>
+          </div>
+        );
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
@@ -98,7 +229,7 @@ const Downloads: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold">Materiais Comerciais</h1>
           <p className="text-muted-foreground">
-            Acesse os materiais disponíveis para download
+            Acesse e visualize os materiais disponíveis
           </p>
         </div>
 
@@ -142,7 +273,7 @@ const Downloads: React.FC = () => {
           </div>
         )}
 
-        {/* Files List */}
+        {/* Files Grid */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -159,44 +290,132 @@ const Downloads: React.FC = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredFiles.map((file) => (
-              <Card key={file.id} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-2">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-lg bg-muted">
-                      <File className="w-5 h-5 text-primary" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredFiles.map((file) => {
+              const fileType = getFileType(file.file_type, file.name);
+              
+              return (
+                <Card 
+                  key={file.id} 
+                  className="group overflow-hidden hover:shadow-lg transition-all duration-300 border-0 shadow-md"
+                >
+                  {/* Thumbnail/Preview Area */}
+                  <div className="relative cursor-pointer" onClick={() => handlePreview(file)}>
+                    {getPreviewThumbnail(file)}
+                    
+                    {/* Hover Overlay */}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 rounded-t-lg">
+                      <Button 
+                        size="sm" 
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePreview(file);
+                        }}
+                      >
+                        <Eye className="w-4 h-4 mr-1" />
+                        Visualizar
+                      </Button>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base line-clamp-1">
-                        {file.name}
-                      </CardTitle>
-                      <CardDescription className="text-sm">
-                        {file.category && <span>{file.category} • </span>}
-                        {formatFileSize(file.file_size)}
-                      </CardDescription>
-                    </div>
+
+                    {/* File Type Badge */}
+                    <Badge 
+                      variant="secondary" 
+                      className="absolute top-2 right-2 text-xs uppercase font-medium"
+                    >
+                      {file.file_type?.split('/')[1] || file.name.split('.').pop()}
+                    </Badge>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {file.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {file.description}
-                    </p>
-                  )}
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => handleDownload(file)}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+
+                  {/* File Info */}
+                  <CardContent className="p-4 space-y-3">
+                    <div className="space-y-1">
+                      <h3 className="font-medium text-sm line-clamp-2 leading-snug">
+                        {file.name}
+                      </h3>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {file.category && (
+                          <>
+                            <span>{file.category}</span>
+                            <span>•</span>
+                          </>
+                        )}
+                        <span>{formatFileSize(file.file_size)}</span>
+                      </div>
+                    </div>
+
+                    {file.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {file.description}
+                      </p>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => handlePreview(file)}
+                      >
+                        <Eye className="w-4 h-4 mr-1" />
+                        Ver
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => handleDownload(file)}
+                      >
+                        <Download className="w-4 h-4 mr-1" />
+                        Baixar
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
+
+        {/* Preview Dialog */}
+        <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
+          <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <div className="flex items-center justify-between">
+                <DialogTitle className="flex items-center gap-2 text-lg">
+                  {previewFile && getFileIcon(getFileType(previewFile.file_type, previewFile.name))}
+                  <span className="truncate max-w-[300px] sm:max-w-[500px]">
+                    {previewFile?.name}
+                  </span>
+                </DialogTitle>
+              </div>
+              {previewFile && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {previewFile.category && <Badge variant="outline">{previewFile.category}</Badge>}
+                  <span>{formatFileSize(previewFile.file_size)}</span>
+                </div>
+              )}
+            </DialogHeader>
+
+            {/* Preview Content */}
+            <div className="mt-4">
+              {previewFile && renderPreviewContent(previewFile)}
+            </div>
+
+            {/* Footer Actions */}
+            {previewFile && canPreviewInBrowser(previewFile) && (
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setPreviewFile(null)}>
+                  Fechar
+                </Button>
+                <Button onClick={() => handleDownload(previewFile)}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Fazer Download
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
