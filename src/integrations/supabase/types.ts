@@ -19,6 +19,7 @@ export type Database = {
           action: string
           created_at: string | null
           id: string
+          ip_address: string | null
           resource_id: string | null
           resource_type: string | null
           user_id: string | null
@@ -27,6 +28,7 @@ export type Database = {
           action: string
           created_at?: string | null
           id?: string
+          ip_address?: string | null
           resource_id?: string | null
           resource_type?: string | null
           user_id?: string | null
@@ -35,6 +37,7 @@ export type Database = {
           action?: string
           created_at?: string | null
           id?: string
+          ip_address?: string | null
           resource_id?: string | null
           resource_type?: string | null
           user_id?: string | null

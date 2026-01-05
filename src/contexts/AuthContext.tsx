@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { AppRole, UserProfile, AuthUser } from '@/types/auth';
+import { getIpAddress } from '@/hooks/useIpAddress';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -52,12 +53,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setUser(authUserData);
 
-      // Log access
+      // Log access with IP
       if (profile) {
+        const ipAddress = await getIpAddress();
         await supabase.from('access_logs').insert({
           user_id: authUser.id,
           action: 'login',
           resource_type: 'session',
+          ip_address: ipAddress,
         });
       }
     } catch (error) {

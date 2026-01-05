@@ -15,7 +15,7 @@ import {
 import { 
   BarChart3, Users, Activity, TrendingUp, Loader2, 
   User, Download, LogIn, FileText, ChevronLeft, Calendar,
-  Clock
+  Clock, Globe
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -43,6 +43,7 @@ interface UserActivity {
   resource_id: string | null;
   created_at: string;
   resource_name?: string;
+  ip_address?: string | null;
 }
 
 const Reports: React.FC = () => {
@@ -183,6 +184,7 @@ const Reports: React.FC = () => {
           return {
             ...log,
             resource_name: resourceName,
+            ip_address: log.ip_address,
           };
         })
       );
@@ -377,6 +379,7 @@ const Reports: React.FC = () => {
                       <TableHead>Ação</TableHead>
                       <TableHead>Recurso</TableHead>
                       <TableHead>Detalhes</TableHead>
+                      <TableHead>IP</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -404,11 +407,21 @@ const Reports: React.FC = () => {
                         <TableCell className="max-w-[200px] truncate">
                           {activity.resource_name || '-'}
                         </TableCell>
+                        <TableCell>
+                          {activity.ip_address ? (
+                            <div className="flex items-center gap-1 text-muted-foreground">
+                              <Globe className="w-3 h-3" />
+                              <span className="font-mono text-xs">{activity.ip_address}</span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                     {userActivities.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center py-12">
+                        <TableCell colSpan={5} className="text-center py-12">
                           <Activity className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
                           <p className="text-muted-foreground">
                             Nenhuma atividade registrada para este usuário
