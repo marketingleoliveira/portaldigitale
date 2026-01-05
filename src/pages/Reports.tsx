@@ -15,7 +15,7 @@ import {
 import { 
   BarChart3, Users, Activity, TrendingUp, Loader2, 
   User, Download, LogIn, FileText, ChevronLeft, Calendar,
-  Clock, Globe, Timer
+  Clock, Globe, Timer, Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -247,6 +247,23 @@ const Reports: React.FC = () => {
     return format(new Date(dateString + 'T00:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR });
   };
 
+  const handleDeleteTimeRecord = async (recordId: string) => {
+    if (!confirm('Tem certeza que deseja excluir este registro de ponto?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('time_records')
+        .delete()
+        .eq('id', recordId);
+
+      if (error) throw error;
+      
+      setTimeRecords(prev => prev.filter(r => r.id !== recordId));
+    } catch (error) {
+      console.error('Error deleting time record:', error);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
       day: '2-digit',
@@ -459,6 +476,7 @@ const Reports: React.FC = () => {
                         <TableHead className="text-center">Saída Almoço (12h)</TableHead>
                         <TableHead className="text-center">Retorno (13h)</TableHead>
                         <TableHead className="text-center">Saída (18h)</TableHead>
+                        {user?.role === 'dev' && <TableHead className="text-center">Ações</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -490,6 +508,18 @@ const Reports: React.FC = () => {
                               {formatPunchTime(record.exit_time)}
                             </Badge>
                           </TableCell>
+                          {user?.role === 'dev' && (
+                            <TableCell className="text-center">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteTimeRecord(record.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
