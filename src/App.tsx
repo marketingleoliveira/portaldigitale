@@ -25,6 +25,7 @@ import NewTicket from "./pages/NewTicket";
 import TicketDetails from "./pages/TicketDetails";
 import NotFound from "./pages/NotFound";
 import Team from "./pages/Team";
+import TimeClock from "./pages/TimeClock";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +57,7 @@ const App = () => (
               <Route path="/tickets" element={<ProtectedRoute><Tickets /></ProtectedRoute>} />
               <Route path="/tickets/novo" element={<ProtectedRoute><NewTicket /></ProtectedRoute>} />
               <Route path="/tickets/:id" element={<ProtectedRoute><TicketDetails /></ProtectedRoute>} />
+              <Route path="/ponto" element={<ProtectedRoute><TimeClock /></ProtectedRoute>} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>
