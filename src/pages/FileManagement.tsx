@@ -18,7 +18,9 @@ import {
   Loader2,
   File,
   X,
-  Pencil
+  Pencil,
+  Link,
+  Globe
 } from 'lucide-react';
 import {
   Dialog,
@@ -96,6 +98,18 @@ const FileManagement: React.FC = () => {
     visibility: [] as AppRole[],
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  
+  // Link dialog state
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkFormData, setLinkFormData] = useState({
+    name: '',
+    description: '',
+    url: '',
+    category_id: '',
+    subcategory_id: '',
+    visibility: ['vendedor'] as AppRole[],
+  });
+  const [savingLink, setSavingLink] = useState(false);
 
   useEffect(() => {
     fetchFiles();
@@ -446,6 +460,100 @@ const FileManagement: React.FC = () => {
     setSelectedFiles([]);
   };
 
+  const resetLinkForm = () => {
+    setLinkFormData({
+      name: '',
+      description: '',
+      url: '',
+      category_id: '',
+      subcategory_id: '',
+      visibility: ['vendedor'],
+    });
+  };
+
+  const handleLinkCategoryChange = (categoryId: string) => {
+    setLinkFormData(prev => ({ ...prev, category_id: categoryId, subcategory_id: '' }));
+  };
+
+  const handleLinkVisibilityChange = (role: AppRole, checked: boolean) => {
+    setLinkFormData(prev => ({
+      ...prev,
+      visibility: checked
+        ? [...prev.visibility, role]
+        : prev.visibility.filter(r => r !== role),
+    }));
+  };
+
+  const handleSaveLink = async () => {
+    if (!linkFormData.name.trim()) {
+      toast.error('Informe o nome do link');
+      return;
+    }
+
+    if (!linkFormData.url.trim()) {
+      toast.error('Informe a URL do link');
+      return;
+    }
+
+    // Validate URL
+    try {
+      new URL(linkFormData.url);
+    } catch {
+      toast.error('URL inválida. Use o formato completo (ex: https://exemplo.com)');
+      return;
+    }
+
+    if (linkFormData.visibility.length === 0) {
+      toast.error('Selecione pelo menos um cargo para visualização');
+      return;
+    }
+
+    setSavingLink(true);
+
+    try {
+      const categoryName = linkFormData.category_id ? getCategoryName(linkFormData.category_id) : null;
+
+      // Insert link record
+      const { data: linkRecord, error: insertError } = await supabase
+        .from('files')
+        .insert({
+          name: linkFormData.name,
+          description: linkFormData.description || null,
+          file_url: linkFormData.url,
+          file_type: 'link',
+          file_size: null,
+          category: categoryName,
+          subcategory_id: linkFormData.subcategory_id || null,
+          created_by: user?.id,
+          is_external_link: true,
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Insert visibility records
+      const visibilityRecords = linkFormData.visibility.map(role => ({
+        file_id: linkRecord.id,
+        visible_to_role: role,
+      }));
+
+      await supabase.from('file_visibility').insert(visibilityRecords);
+
+      toast.success('Link adicionado com sucesso');
+      setLinkDialogOpen(false);
+      resetLinkForm();
+      fetchFiles();
+    } catch (error: any) {
+      console.error('Error saving link:', error);
+      toast.error(error.message || 'Erro ao adicionar link');
+    } finally {
+      setSavingLink(false);
+    }
+  };
+
+  const linkFilteredSubcategories = getSubcategoriesForCategory(linkFormData.category_id);
+
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return '-';
     if (bytes < 1024) return `${bytes} B`;
@@ -481,13 +589,168 @@ const FileManagement: React.FC = () => {
               Faça upload de arquivos e controle a visibilidade por cargo
             </p>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
-                <Plus className="w-4 h-4 mr-2" />
-                Novo Arquivo
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            {/* Add Link Button */}
+            <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" onClick={() => { resetLinkForm(); setLinkDialogOpen(true); }}>
+                  <Link className="w-4 h-4 mr-2" />
+                  Novo Link
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Globe className="w-5 h-5 text-cyan-600" />
+                    Adicionar Link Externo
+                  </DialogTitle>
+                  <DialogDescription>
+                    Adicione um link externo para ser acessado na página de materiais
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 mt-4">
+                  {/* Name */}
+                  <div className="space-y-2">
+                    <Label htmlFor="link-name">Nome *</Label>
+                    <Input
+                      id="link-name"
+                      value={linkFormData.name}
+                      onChange={(e) => setLinkFormData(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Nome do link"
+                    />
+                  </div>
+
+                  {/* URL */}
+                  <div className="space-y-2">
+                    <Label htmlFor="link-url">URL *</Label>
+                    <Input
+                      id="link-url"
+                      value={linkFormData.url}
+                      onChange={(e) => setLinkFormData(prev => ({ ...prev, url: e.target.value }))}
+                      placeholder="https://exemplo.com"
+                      type="url"
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div className="space-y-2">
+                    <Label htmlFor="link-description">Descrição</Label>
+                    <Textarea
+                      id="link-description"
+                      value={linkFormData.description}
+                      onChange={(e) => setLinkFormData(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="Descrição opcional"
+                      rows={2}
+                    />
+                  </div>
+
+                  {/* Category */}
+                  <div className="space-y-2">
+                    <Label>Categoria</Label>
+                    <Select
+                      value={linkFormData.category_id}
+                      onValueChange={handleLinkCategoryChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.length === 0 ? (
+                          <SelectItem value="none" disabled>
+                            Nenhuma categoria cadastrada
+                          </SelectItem>
+                        ) : (
+                          categories.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Subcategory */}
+                  {linkFormData.category_id && (
+                    <div className="space-y-2">
+                      <Label>Subcategoria</Label>
+                      <Select
+                        value={linkFormData.subcategory_id}
+                        onValueChange={(value) => setLinkFormData(prev => ({ ...prev, subcategory_id: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione uma subcategoria (opcional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {linkFilteredSubcategories.length === 0 ? (
+                            <SelectItem value="none" disabled>
+                              Nenhuma subcategoria nesta categoria
+                            </SelectItem>
+                          ) : (
+                            linkFilteredSubcategories.map((sub) => (
+                              <SelectItem key={sub.id} value={sub.id}>
+                                {sub.name}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {/* Visibility */}
+                  <div className="space-y-2">
+                    <Label>Visível para *</Label>
+                    <div className="flex flex-wrap gap-4">
+                      {ALL_ROLES.map(role => (
+                        <div key={role} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`link-role-${role}`}
+                            checked={linkFormData.visibility.includes(role)}
+                            onCheckedChange={(checked) => 
+                              handleLinkVisibilityChange(role, checked as boolean)
+                            }
+                          />
+                          <label
+                            htmlFor={`link-role-${role}`}
+                            className="text-sm font-medium leading-none cursor-pointer"
+                          >
+                            {ROLE_LABELS[role]}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Button 
+                    className="w-full bg-cyan-600 hover:bg-cyan-700" 
+                    onClick={handleSaveLink}
+                    disabled={savingLink}
+                  >
+                    {savingLink ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      <>
+                        <Link className="w-4 h-4 mr-2" />
+                        Adicionar Link
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Add File Button */}
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Novo Arquivo
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Enviar Arquivo</DialogTitle>
@@ -668,6 +931,7 @@ const FileManagement: React.FC = () => {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {/* Search */}
@@ -719,9 +983,20 @@ const FileManagement: React.FC = () => {
                       <TableRow key={file.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-primary" />
+                            {file.is_external_link ? (
+                              <Globe className="w-4 h-4 text-cyan-600" />
+                            ) : (
+                              <FileText className="w-4 h-4 text-primary" />
+                            )}
                             <div>
-                              <p className="font-medium">{file.name}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium">{file.name}</p>
+                                {file.is_external_link && (
+                                  <Badge variant="outline" className="text-xs text-cyan-600 border-cyan-600">
+                                    LINK
+                                  </Badge>
+                                )}
+                              </div>
                               {file.description && (
                                 <p className="text-sm text-muted-foreground line-clamp-1">
                                   {file.description}
@@ -731,15 +1006,22 @@ const FileManagement: React.FC = () => {
                           </div>
                         </TableCell>
                         <TableCell>{getFileDisplayCategory(file)}</TableCell>
-                        <TableCell>{formatFileSize(file.file_size)}</TableCell>
+                        <TableCell>
+                          {file.is_external_link ? '-' : formatFileSize(file.file_size)}
+                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
                               variant="outline"
                               size="icon"
                               onClick={() => window.open(file.file_url, '_blank')}
+                              title={file.is_external_link ? 'Acessar link' : 'Download'}
                             >
-                              <Download className="w-4 h-4" />
+                              {file.is_external_link ? (
+                                <Link className="w-4 h-4 text-cyan-600" />
+                              ) : (
+                                <Download className="w-4 h-4" />
+                              )}
                             </Button>
                             <Button
                               variant="outline"

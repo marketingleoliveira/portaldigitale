@@ -93,6 +93,7 @@ export interface FileItem {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  is_external_link?: boolean;
   visibility?: AppRole[];
   subcategory?: Subcategory;
 }

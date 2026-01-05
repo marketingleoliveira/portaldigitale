@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { FileItem, AppRole } from '@/types/auth';
 import { 
   FileText, Download, Search, Loader2, FolderOpen, Eye, X,
-  FileImage, FileVideo, FileAudio, FileSpreadsheet, FileType, File
+  FileImage, FileVideo, FileAudio, FileSpreadsheet, FileType, File, Globe, ExternalLink
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,11 +35,24 @@ const Downloads: React.FC = () => {
       await logDownload('file', file.id);
       window.open(file.file_url, '_blank');
       toast({
-        title: 'Download iniciado',
-        description: `Baixando ${file.name}`,
+        title: file.is_external_link ? 'Link aberto' : 'Download iniciado',
+        description: file.is_external_link ? `Acessando ${file.name}` : `Baixando ${file.name}`,
       });
     } catch (error) {
       console.error('Error during download:', error);
+    }
+  };
+
+  const handleAccessLink = async (file: FileItem) => {
+    try {
+      await logDownload('link', file.id);
+      window.open(file.file_url, '_blank');
+      toast({
+        title: 'Link aberto',
+        description: `Acessando ${file.name}`,
+      });
+    } catch (error) {
+      console.error('Error accessing link:', error);
     }
   };
 
@@ -127,6 +140,11 @@ const Downloads: React.FC = () => {
   };
 
   const getFileTypeLabel = (file: FileItem): string => {
+    // External links
+    if (file.is_external_link) {
+      return 'LINK';
+    }
+
     const name = file.name.toLowerCase();
     const type = file.file_type?.toLowerCase() || '';
     
@@ -148,6 +166,17 @@ const Downloads: React.FC = () => {
   };
 
   const getPreviewThumbnail = (file: FileItem) => {
+    // External links get special treatment
+    if (file.is_external_link) {
+      return (
+        <div className="w-full h-40 flex items-center justify-center bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-t-lg">
+          <div className="p-6 rounded-2xl bg-background/80 backdrop-blur">
+            <Globe className="w-12 h-12 text-cyan-600" />
+          </div>
+        </div>
+      );
+    }
+
     const fileType = getFileType(file.file_type, file.name);
     
     if (fileType === 'image') {
@@ -169,6 +198,7 @@ const Downloads: React.FC = () => {
       pdf: 'from-red-500/20 to-orange-500/20 text-red-600',
       spreadsheet: 'from-emerald-500/20 to-teal-500/20 text-emerald-600',
       document: 'from-blue-500/20 to-indigo-500/20 text-blue-600',
+      presentation: 'from-orange-500/20 to-amber-500/20 text-orange-600',
       other: 'from-gray-500/20 to-slate-500/20 text-gray-600',
     };
 
@@ -323,7 +353,10 @@ const Downloads: React.FC = () => {
                   className="group overflow-hidden hover:shadow-lg transition-all duration-300 border-0 shadow-md"
                 >
                   {/* Thumbnail/Preview Area */}
-                  <div className="relative cursor-pointer" onClick={() => handlePreview(file)}>
+                  <div 
+                    className="relative cursor-pointer" 
+                    onClick={() => file.is_external_link ? handleAccessLink(file) : handlePreview(file)}
+                  >
                     {getPreviewThumbnail(file)}
                     
                     {/* Hover Overlay */}
@@ -333,18 +366,29 @@ const Downloads: React.FC = () => {
                         variant="secondary"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handlePreview(file);
+                          file.is_external_link ? handleAccessLink(file) : handlePreview(file);
                         }}
                       >
-                        <Eye className="w-4 h-4 mr-1" />
-                        Visualizar
+                        {file.is_external_link ? (
+                          <>
+                            <ExternalLink className="w-4 h-4 mr-1" />
+                            Acessar
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="w-4 h-4 mr-1" />
+                            Visualizar
+                          </>
+                        )}
                       </Button>
                     </div>
 
                     {/* File Type Badge */}
                     <Badge 
-                      variant="secondary" 
-                      className="absolute top-2 right-2 text-xs uppercase font-medium"
+                      variant={file.is_external_link ? "default" : "secondary"}
+                      className={`absolute top-2 right-2 text-xs uppercase font-medium ${
+                        file.is_external_link ? 'bg-cyan-600 hover:bg-cyan-700' : ''
+                      }`}
                     >
                       {getFileTypeLabel(file)}
                     </Badge>
@@ -360,10 +404,10 @@ const Downloads: React.FC = () => {
                         {file.category && (
                           <>
                             <span>{file.category}</span>
-                            <span>•</span>
+                            {!file.is_external_link && <span>•</span>}
                           </>
                         )}
-                        <span>{formatFileSize(file.file_size)}</span>
+                        {!file.is_external_link && <span>{formatFileSize(file.file_size)}</span>}
                       </div>
                     </div>
 
@@ -375,23 +419,36 @@ const Downloads: React.FC = () => {
 
                     {/* Action Buttons */}
                     <div className="flex gap-2 pt-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handlePreview(file)}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        Ver
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleDownload(file)}
-                      >
-                        <Download className="w-4 h-4 mr-1" />
-                        Baixar
-                      </Button>
+                      {file.is_external_link ? (
+                        <Button
+                          size="sm"
+                          className="flex-1 bg-cyan-600 hover:bg-cyan-700"
+                          onClick={() => handleAccessLink(file)}
+                        >
+                          <ExternalLink className="w-4 h-4 mr-1" />
+                          Acessar
+                        </Button>
+                      ) : (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handlePreview(file)}
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            Ver
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handleDownload(file)}
+                          >
+                            <Download className="w-4 h-4 mr-1" />
+                            Baixar
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

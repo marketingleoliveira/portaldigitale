@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCallback } from 'react';
 
 type LogAction = 'login' | 'download' | 'view';
-type ResourceType = 'file' | 'product' | 'catalog' | 'technical_sheet';
+type ResourceType = 'file' | 'product' | 'catalog' | 'technical_sheet' | 'link';
 
 export const useAccessLog = () => {
   const { user } = useAuth();
