@@ -99,7 +99,7 @@ const Downloads: React.FC = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const getFileType = (fileType: string | null, fileName: string): 'image' | 'video' | 'audio' | 'pdf' | 'spreadsheet' | 'document' | 'other' => {
+  const getFileType = (fileType: string | null, fileName: string): 'image' | 'video' | 'audio' | 'pdf' | 'spreadsheet' | 'document' | 'presentation' | 'other' => {
     const type = fileType?.toLowerCase() || '';
     const name = fileName.toLowerCase();
     
@@ -109,6 +109,7 @@ const Downloads: React.FC = () => {
     if (type === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
     if (/\.(xlsx?|csv|ods)$/i.test(name) || type.includes('spreadsheet')) return 'spreadsheet';
     if (/\.(docx?|odt|rtf|txt)$/i.test(name) || type.includes('document')) return 'document';
+    if (/\.(pptx?|odp)$/i.test(name) || type.includes('presentation')) return 'presentation';
     return 'other';
   };
 
@@ -120,8 +121,30 @@ const Downloads: React.FC = () => {
       case 'pdf': return <FileText className="w-5 h-5" />;
       case 'spreadsheet': return <FileSpreadsheet className="w-5 h-5" />;
       case 'document': return <FileType className="w-5 h-5" />;
+      case 'presentation': return <FileType className="w-5 h-5" />;
       default: return <File className="w-5 h-5" />;
     }
+  };
+
+  const getFileTypeLabel = (file: FileItem): string => {
+    const name = file.name.toLowerCase();
+    const type = file.file_type?.toLowerCase() || '';
+    
+    // Word documents
+    if (/\.(docx?|odt|rtf)$/i.test(name) || type.includes('wordprocessing') || type.includes('msword')) {
+      return 'WORD';
+    }
+    // PowerPoint presentations
+    if (/\.(pptx?|odp)$/i.test(name) || type.includes('presentation') || type.includes('powerpoint')) {
+      return 'SLIDE';
+    }
+    // Excel spreadsheets
+    if (/\.(xlsx?|ods)$/i.test(name) || type.includes('spreadsheet') || type.includes('excel')) {
+      return 'PLANILHA';
+    }
+    
+    // Default: use file extension or mime type
+    return (file.file_type?.split('/')[1] || file.name.split('.').pop() || 'FILE').toUpperCase();
   };
 
   const getPreviewThumbnail = (file: FileItem) => {
@@ -323,7 +346,7 @@ const Downloads: React.FC = () => {
                       variant="secondary" 
                       className="absolute top-2 right-2 text-xs uppercase font-medium"
                     >
-                      {file.file_type?.split('/')[1] || file.name.split('.').pop()}
+                      {getFileTypeLabel(file)}
                     </Badge>
                   </div>
 
