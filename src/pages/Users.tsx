@@ -58,7 +58,7 @@ const userSchema = z.object({
   full_name: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres').max(100),
   email: z.string().email('Email inválido').max(255),
   phone: z.string().max(20).optional(),
-  role: z.enum(['admin', 'gerente', 'vendedor']),
+  role: z.enum(['admin', 'gerente', 'vendedor', 'dev']),
 });
 
 interface UserWithRole extends UserProfile {
@@ -419,6 +419,7 @@ const Users: React.FC = () => {
                       <SelectItem value="vendedor">Vendedor</SelectItem>
                       <SelectItem value="gerente">Gerente</SelectItem>
                       <SelectItem value="admin">Administrador</SelectItem>
+                      <SelectItem value="dev">Desenvolvedor</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -587,6 +588,7 @@ const Users: React.FC = () => {
                     <SelectItem value="vendedor">Vendedor</SelectItem>
                     <SelectItem value="gerente">Gerente</SelectItem>
                     <SelectItem value="admin">Administrador</SelectItem>
+                    <SelectItem value="dev">Desenvolvedor</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
