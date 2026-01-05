@@ -21,12 +21,14 @@ interface TimeRecord {
   exit_time: string | null;
 }
 
-const punchConfig: Record<PunchType, { label: string; icon: React.ReactNode; expectedHour: number; column: keyof TimeRecord }> = {
-  entry: { label: "Entrada", icon: <LogIn className="h-5 w-5" />, expectedHour: 8, column: 'entry_time' },
-  lunch_exit: { label: "Saída Almoço", icon: <Coffee className="h-5 w-5" />, expectedHour: 12, column: 'lunch_exit_time' },
-  lunch_return: { label: "Retorno Almoço", icon: <Sun className="h-5 w-5" />, expectedHour: 13, column: 'lunch_return_time' },
-  exit: { label: "Saída", icon: <LogOut className="h-5 w-5" />, expectedHour: 18, column: 'exit_time' },
+const punchConfig: Record<PunchType, { label: string; icon: React.ReactNode; expectedHour: number; expectedMinute: number; column: keyof TimeRecord }> = {
+  entry: { label: "Entrada", icon: <LogIn className="h-5 w-5" />, expectedHour: 8, expectedMinute: 0, column: 'entry_time' },
+  lunch_exit: { label: "Saída Almoço", icon: <Coffee className="h-5 w-5" />, expectedHour: 12, expectedMinute: 0, column: 'lunch_exit_time' },
+  lunch_return: { label: "Retorno Almoço", icon: <Sun className="h-5 w-5" />, expectedHour: 13, expectedMinute: 0, column: 'lunch_return_time' },
+  exit: { label: "Saída", icon: <LogOut className="h-5 w-5" />, expectedHour: 18, expectedMinute: 0, column: 'exit_time' },
 };
+
+const MINUTES_BEFORE_ALLOWED = 10;
 
 export default function TimeClock() {
   const { user } = useAuth();
@@ -110,6 +112,43 @@ export default function TimeClock() {
     return null;
   };
 
+  const isPunchAllowed = (type: PunchType): boolean => {
+    const config = punchConfig[type];
+    const now = currentTime;
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    // Calculate total minutes from midnight
+    const currentTotalMinutes = currentHour * 60 + currentMinute;
+    const expectedTotalMinutes = config.expectedHour * 60 + config.expectedMinute;
+    const allowedFromMinutes = expectedTotalMinutes - MINUTES_BEFORE_ALLOWED;
+    
+    return currentTotalMinutes >= allowedFromMinutes;
+  };
+
+  const getTimeUntilAllowed = (type: PunchType): string => {
+    const config = punchConfig[type];
+    const now = currentTime;
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    const currentTotalMinutes = currentHour * 60 + currentMinute;
+    const expectedTotalMinutes = config.expectedHour * 60 + config.expectedMinute;
+    const allowedFromMinutes = expectedTotalMinutes - MINUTES_BEFORE_ALLOWED;
+    
+    const minutesLeft = allowedFromMinutes - currentTotalMinutes;
+    
+    if (minutesLeft <= 0) return '';
+    
+    const hours = Math.floor(minutesLeft / 60);
+    const minutes = minutesLeft % 60;
+    
+    if (hours > 0) {
+      return `Liberado em ${hours}h ${minutes}min`;
+    }
+    return `Liberado em ${minutes}min`;
+  };
+
   const formatTime = (time: string | null) => {
     if (!time) return '--:--';
     return format(new Date(time), 'HH:mm');
@@ -158,6 +197,8 @@ export default function TimeClock() {
           const time = todayRecord?.[config.column as keyof TimeRecord] as string | null;
           const isPunched = !!time;
           const isNext = nextPunch === type;
+          const isAllowed = isPunchAllowed(type);
+          const timeUntilAllowed = getTimeUntilAllowed(type);
 
           return (
             <Card 
@@ -171,11 +212,11 @@ export default function TimeClock() {
                     {config.label}
                   </CardTitle>
                   <Badge variant={isPunched ? "default" : "secondary"}>
-                    {config.expectedHour}:00
+                    {config.expectedHour}:{String(config.expectedMinute).padStart(2, '0')}
                   </Badge>
                 </div>
                 <CardDescription>
-                  {isPunched ? 'Registrado' : 'Pendente'}
+                  {isPunched ? 'Registrado' : isAllowed ? 'Pendente' : timeUntilAllowed}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -185,11 +226,11 @@ export default function TimeClock() {
                   </p>
                   <Button
                     onClick={() => handlePunch(type)}
-                    disabled={isPunched}
+                    disabled={isPunched || !isAllowed}
                     className="w-full"
-                    variant={isNext ? "default" : "outline"}
+                    variant={isNext && isAllowed ? "default" : "outline"}
                   >
-                    {isPunched ? 'Registrado ✓' : 'Bater Ponto'}
+                    {isPunched ? 'Registrado ✓' : !isAllowed ? 'Aguarde o horário' : 'Bater Ponto'}
                   </Button>
                 </div>
               </CardContent>
