@@ -15,7 +15,7 @@ import {
 import { 
   BarChart3, Users, Activity, TrendingUp, Loader2, 
   User, Download, LogIn, FileText, ChevronLeft, Calendar,
-  Clock, Globe
+  Clock, Globe, Timer
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -23,6 +23,8 @@ import { Badge } from '@/components/ui/badge';
 import RoleBadge from '@/components/RoleBadge';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface UserProfile {
   id: string;
@@ -46,6 +48,15 @@ interface UserActivity {
   ip_address?: string | null;
 }
 
+interface TimeRecord {
+  id: string;
+  record_date: string;
+  entry_time: string | null;
+  lunch_exit_time: string | null;
+  lunch_return_time: string | null;
+  exit_time: string | null;
+}
+
 const Reports: React.FC = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -54,6 +65,9 @@ const Reports: React.FC = () => {
   const [userActivities, setUserActivities] = useState<UserActivity[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showTimeRecords, setShowTimeRecords] = useState(false);
+  const [timeRecords, setTimeRecords] = useState<TimeRecord[]>([]);
+  const [loadingTimeRecords, setLoadingTimeRecords] = useState(false);
   const [stats, setStats] = useState({
     totalLogins: 0,
     uniqueUsers: 0,
@@ -199,7 +213,38 @@ const Reports: React.FC = () => {
 
   const handleSelectUser = (userProfile: UserProfile) => {
     setSelectedUser(userProfile);
+    setShowTimeRecords(false);
+    setTimeRecords([]);
     fetchUserActivities(userProfile.id);
+  };
+
+  const fetchTimeRecords = async (userId: string) => {
+    setLoadingTimeRecords(true);
+    try {
+      const { data, error } = await supabase
+        .from('time_records')
+        .select('*')
+        .eq('user_id', userId)
+        .order('record_date', { ascending: false })
+        .limit(30);
+
+      if (error) throw error;
+      setTimeRecords(data || []);
+      setShowTimeRecords(true);
+    } catch (error) {
+      console.error('Error fetching time records:', error);
+    } finally {
+      setLoadingTimeRecords(false);
+    }
+  };
+
+  const formatPunchTime = (time: string | null) => {
+    if (!time) return '--:--';
+    return format(new Date(time), 'HH:mm');
+  };
+
+  const formatRecordDate = (dateString: string) => {
+    return format(new Date(dateString + 'T00:00:00'), "EEEE, dd 'de' MMMM", { locale: ptBR });
   };
 
   const formatDate = (dateString: string) => {
@@ -295,6 +340,8 @@ const Reports: React.FC = () => {
               onClick={() => {
                 setSelectedUser(null);
                 setUserActivities([]);
+                setShowTimeRecords(false);
+                setTimeRecords([]);
               }}
             >
               <ChevronLeft className="w-5 h-5" />
@@ -306,7 +353,7 @@ const Reports: React.FC = () => {
                   {selectedUser.full_name.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div>
+              <div className="flex-1">
                 <h1 className="text-2xl font-bold">{selectedUser.full_name}</h1>
                 <p className="text-muted-foreground">{selectedUser.email}</p>
                 <div className="flex items-center gap-2 mt-1">
@@ -316,6 +363,19 @@ const Reports: React.FC = () => {
                   </Badge>
                 </div>
               </div>
+              <Button 
+                onClick={() => fetchTimeRecords(selectedUser.id)}
+                variant={showTimeRecords ? "default" : "outline"}
+                className="gap-2"
+                disabled={loadingTimeRecords}
+              >
+                {loadingTimeRecords ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Timer className="w-4 h-4" />
+                )}
+                PONTO
+              </Button>
             </div>
           </div>
 
@@ -365,6 +425,79 @@ const Reports: React.FC = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Time Records Section */}
+          {showTimeRecords && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Timer className="w-5 h-5 text-primary" />
+                  Registro de Ponto
+                </CardTitle>
+                <CardDescription>
+                  Últimos 30 dias de registros de ponto
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                {loadingTimeRecords ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  </div>
+                ) : timeRecords.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Timer className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">
+                      Nenhum registro de ponto encontrado
+                    </p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data</TableHead>
+                        <TableHead className="text-center">Entrada (8h)</TableHead>
+                        <TableHead className="text-center">Saída Almoço (12h)</TableHead>
+                        <TableHead className="text-center">Retorno (13h)</TableHead>
+                        <TableHead className="text-center">Saída (18h)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {timeRecords.map((record) => (
+                        <TableRow key={record.id}>
+                          <TableCell className="font-medium whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 text-muted-foreground" />
+                              <span className="capitalize">{formatRecordDate(record.record_date)}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={record.entry_time ? "default" : "secondary"} className="font-mono">
+                              {formatPunchTime(record.entry_time)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={record.lunch_exit_time ? "default" : "secondary"} className="font-mono">
+                              {formatPunchTime(record.lunch_exit_time)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={record.lunch_return_time ? "default" : "secondary"} className="font-mono">
+                              {formatPunchTime(record.lunch_return_time)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={record.exit_time ? "default" : "secondary"} className="font-mono">
+                              {formatPunchTime(record.exit_time)}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Activity History */}
           <Card>
