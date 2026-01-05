@@ -650,7 +650,8 @@ const Goals: React.FC = () => {
               </TabsList>
             </Tabs>
 
-            {/* Team Goals Section */}
+            {/* Team Goals Section - Only visible to DEV */}
+            {isDev && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -834,6 +835,7 @@ const Goals: React.FC = () => {
                 )}
               </CardContent>
             </Card>
+            )}
 
             {/* Individual Goals Section */}
             <Card>
