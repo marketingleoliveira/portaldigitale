@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
-import { FileItem, AppRole, ROLE_LABELS, Subcategory } from '@/types/auth';
+import { FileItem, AppRole, ROLE_LABELS, Subcategory, REGIONS } from '@/types/auth';
 import { 
   Plus, 
   Trash2, 
@@ -20,7 +20,8 @@ import {
   X,
   Pencil,
   Link,
-  Globe
+  Globe,
+  MapPin
 } from 'lucide-react';
 import {
   Dialog,
@@ -89,6 +90,7 @@ const FileManagement: React.FC = () => {
     category_id: '',
     subcategory_id: '',
     visibility: ['vendedor'] as AppRole[],
+    regions: [] as string[],
   });
   const [editFormData, setEditFormData] = useState({
     name: '',
@@ -96,6 +98,7 @@ const FileManagement: React.FC = () => {
     category_id: '',
     subcategory_id: '',
     visibility: [] as AppRole[],
+    regions: [] as string[],
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   
@@ -108,6 +111,7 @@ const FileManagement: React.FC = () => {
     category_id: '',
     subcategory_id: '',
     visibility: ['vendedor'] as AppRole[],
+    regions: [] as string[],
   });
   const [savingLink, setSavingLink] = useState(false);
 
@@ -222,6 +226,33 @@ const FileManagement: React.FC = () => {
     }));
   };
 
+  const handleRegionChange = (region: string, checked: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      regions: checked
+        ? [...prev.regions, region]
+        : prev.regions.filter(r => r !== region),
+    }));
+  };
+
+  const handleEditRegionChange = (region: string, checked: boolean) => {
+    setEditFormData(prev => ({
+      ...prev,
+      regions: checked
+        ? [...prev.regions, region]
+        : prev.regions.filter(r => r !== region),
+    }));
+  };
+
+  const handleLinkRegionChange = (region: string, checked: boolean) => {
+    setLinkFormData(prev => ({
+      ...prev,
+      regions: checked
+        ? [...prev.regions, region]
+        : prev.regions.filter(r => r !== region),
+    }));
+  };
+
   const handleCategoryChange = (categoryId: string) => {
     setFormData(prev => ({ ...prev, category_id: categoryId, subcategory_id: '' }));
   };
@@ -259,7 +290,23 @@ const FileManagement: React.FC = () => {
       category_id: categoryId,
       subcategory_id: file.subcategory_id || '',
       visibility: file.visibility || [],
+      regions: [], // Will be loaded separately
     });
+    
+    // Load region visibility for file
+    supabase
+      .from('file_region_visibility')
+      .select('region')
+      .eq('file_id', file.id)
+      .then(({ data }) => {
+        if (data) {
+          setEditFormData(prev => ({
+            ...prev,
+            regions: data.map(r => r.region),
+          }));
+        }
+      });
+    
     setEditDialogOpen(true);
   };
 
@@ -314,6 +361,22 @@ const FileManagement: React.FC = () => {
         .insert(visibilityRecords);
 
       if (visibilityError) throw visibilityError;
+
+      // Delete existing region visibility records
+      await supabase
+        .from('file_region_visibility')
+        .delete()
+        .eq('file_id', fileToEdit.id);
+
+      // Insert new region visibility records if any
+      if (editFormData.regions.length > 0) {
+        const regionRecords = editFormData.regions.map(region => ({
+          file_id: fileToEdit.id,
+          region,
+        }));
+
+        await supabase.from('file_region_visibility').insert(regionRecords);
+      }
 
       toast.success('Arquivo atualizado com sucesso');
       setEditDialogOpen(false);
@@ -401,6 +464,17 @@ const FileManagement: React.FC = () => {
         }));
 
         await supabase.from('file_visibility').insert(visibilityRecords);
+
+        // Insert region visibility records if any
+        if (formData.regions.length > 0) {
+          const regionRecords = formData.regions.map(region => ({
+            file_id: fileRecord.id,
+            region,
+          }));
+
+          await supabase.from('file_region_visibility').insert(regionRecords);
+        }
+
         successCount++;
       }
 
@@ -456,6 +530,7 @@ const FileManagement: React.FC = () => {
       category_id: '',
       subcategory_id: '',
       visibility: ['vendedor'],
+      regions: [],
     });
     setSelectedFiles([]);
   };
@@ -468,6 +543,7 @@ const FileManagement: React.FC = () => {
       category_id: '',
       subcategory_id: '',
       visibility: ['vendedor'],
+      regions: [],
     });
   };
 
@@ -539,6 +615,16 @@ const FileManagement: React.FC = () => {
       }));
 
       await supabase.from('file_visibility').insert(visibilityRecords);
+
+      // Insert region visibility records if any
+      if (linkFormData.regions.length > 0) {
+        const regionRecords = linkFormData.regions.map(region => ({
+          file_id: linkRecord.id,
+          region,
+        }));
+
+        await supabase.from('file_region_visibility').insert(regionRecords);
+      }
 
       toast.success('Link adicionado com sucesso');
       setLinkDialogOpen(false);
@@ -722,7 +808,39 @@ const FileManagement: React.FC = () => {
                     </div>
                   </div>
 
-                  <Button 
+                  {/* Region Visibility - only show when vendedor is selected */}
+                  {linkFormData.visibility.includes('vendedor') && (
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
+                        Restringir por Região (Vendedores)
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Deixe vazio para todos os vendedores verem. Selecione regiões para restringir.
+                      </p>
+                      <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto border rounded-lg p-2">
+                        {REGIONS.map(region => (
+                          <div key={region.value} className="flex items-center space-x-1">
+                            <Checkbox
+                              id={`link-region-${region.value}`}
+                              checked={linkFormData.regions.includes(region.value)}
+                              onCheckedChange={(checked) => 
+                                handleLinkRegionChange(region.value, checked as boolean)
+                              }
+                            />
+                            <label
+                              htmlFor={`link-region-${region.value}`}
+                              className="text-xs cursor-pointer"
+                            >
+                              {region.value}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <Button
                     className="w-full bg-cyan-600 hover:bg-cyan-700" 
                     onClick={handleSaveLink}
                     disabled={savingLink}
@@ -911,7 +1029,39 @@ const FileManagement: React.FC = () => {
                   </div>
                 </div>
 
-                <Button 
+                {/* Region Visibility - only show when vendedor is selected */}
+                {formData.visibility.includes('vendedor') && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      Restringir por Região (Vendedores)
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Deixe vazio para todos os vendedores verem. Selecione regiões para restringir.
+                    </p>
+                    <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto border rounded-lg p-2">
+                      {REGIONS.map(region => (
+                        <div key={region.value} className="flex items-center space-x-1">
+                          <Checkbox
+                            id={`upload-region-${region.value}`}
+                            checked={formData.regions.includes(region.value)}
+                            onCheckedChange={(checked) => 
+                              handleRegionChange(region.value, checked as boolean)
+                            }
+                          />
+                          <label
+                            htmlFor={`upload-region-${region.value}`}
+                            className="text-xs cursor-pointer"
+                          >
+                            {region.value}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <Button
                   className="w-full" 
                   onClick={handleUpload}
                   disabled={uploading}
@@ -1181,7 +1331,39 @@ const FileManagement: React.FC = () => {
                 </div>
               </div>
 
-              <Button 
+              {/* Region Visibility - only show when vendedor is selected */}
+              {editFormData.visibility.includes('vendedor') && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4" />
+                    Restringir por Região (Vendedores)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Deixe vazio para todos os vendedores verem. Selecione regiões para restringir.
+                  </p>
+                  <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto border rounded-lg p-2">
+                    {REGIONS.map(region => (
+                      <div key={region.value} className="flex items-center space-x-1">
+                        <Checkbox
+                          id={`edit-region-${region.value}`}
+                          checked={editFormData.regions.includes(region.value)}
+                          onCheckedChange={(checked) => 
+                            handleEditRegionChange(region.value, checked as boolean)
+                          }
+                        />
+                        <label
+                          htmlFor={`edit-region-${region.value}`}
+                          className="text-xs cursor-pointer"
+                        >
+                          {region.value}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Button
                 className="w-full" 
                 onClick={handleUpdate}
                 disabled={updating}

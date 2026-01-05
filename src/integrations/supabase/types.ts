@@ -65,6 +65,32 @@ export type Database = {
         }
         Relationships: []
       }
+      file_region_visibility: {
+        Row: {
+          file_id: string
+          id: string
+          region: string
+        }
+        Insert: {
+          file_id: string
+          id?: string
+          region: string
+        }
+        Update: {
+          file_id?: string
+          id?: string
+          region?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_region_visibility_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       file_visibility: {
         Row: {
           file_id: string
@@ -384,6 +410,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           phone: string | null
+          region: string | null
           updated_at: string | null
         }
         Insert: {
@@ -394,6 +421,7 @@ export type Database = {
           id: string
           is_active?: boolean | null
           phone?: string | null
+          region?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -404,6 +432,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           phone?: string | null
+          region?: string | null
           updated_at?: string | null
         }
         Relationships: []
