@@ -706,6 +706,103 @@ const Reports: React.FC = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Edit Time Record Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-primary" />
+                Editar Registro de Ponto
+              </DialogTitle>
+              <DialogDescription>
+                {editingRecord && (
+                  <span className="capitalize">
+                    {format(new Date(editingRecord.record_date + 'T00:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            
+            {editingRecord && (
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="entry_time" className="text-right">
+                    Entrada
+                  </Label>
+                  <Input
+                    id="entry_time"
+                    type="time"
+                    value={editingRecord.entry_time}
+                    onChange={(e) => setEditingRecord({ ...editingRecord, entry_time: e.target.value })}
+                    className="col-span-3 font-mono"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="lunch_exit_time" className="text-right">
+                    Saída Almoço
+                  </Label>
+                  <Input
+                    id="lunch_exit_time"
+                    type="time"
+                    value={editingRecord.lunch_exit_time}
+                    onChange={(e) => setEditingRecord({ ...editingRecord, lunch_exit_time: e.target.value })}
+                    className="col-span-3 font-mono"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="lunch_return_time" className="text-right">
+                    Retorno
+                  </Label>
+                  <Input
+                    id="lunch_return_time"
+                    type="time"
+                    value={editingRecord.lunch_return_time}
+                    onChange={(e) => setEditingRecord({ ...editingRecord, lunch_return_time: e.target.value })}
+                    className="col-span-3 font-mono"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="exit_time" className="text-right">
+                    Saída
+                  </Label>
+                  <Input
+                    id="exit_time"
+                    type="time"
+                    value={editingRecord.exit_time}
+                    onChange={(e) => setEditingRecord({ ...editingRecord, exit_time: e.target.value })}
+                    className="col-span-3 font-mono"
+                  />
+                </div>
+              </div>
+            )}
+
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setEditDialogOpen(false);
+                  setEditingRecord(null);
+                }}
+                disabled={savingEdit}
+              >
+                <X className="w-4 h-4 mr-2" />
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSaveEdit}
+                disabled={savingEdit}
+              >
+                {savingEdit ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
+                Salvar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DashboardLayout>
     );
   }
@@ -861,103 +958,6 @@ const Reports: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-
-      {/* Edit Time Record Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Pencil className="w-5 h-5 text-primary" />
-              Editar Registro de Ponto
-            </DialogTitle>
-            <DialogDescription>
-              {editingRecord && (
-                <span className="capitalize">
-                  {format(new Date(editingRecord.record_date + 'T00:00:00'), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                </span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          
-          {editingRecord && (
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="entry_time" className="text-right">
-                  Entrada
-                </Label>
-                <Input
-                  id="entry_time"
-                  type="time"
-                  value={editingRecord.entry_time}
-                  onChange={(e) => setEditingRecord({ ...editingRecord, entry_time: e.target.value })}
-                  className="col-span-3 font-mono"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="lunch_exit_time" className="text-right">
-                  Saída Almoço
-                </Label>
-                <Input
-                  id="lunch_exit_time"
-                  type="time"
-                  value={editingRecord.lunch_exit_time}
-                  onChange={(e) => setEditingRecord({ ...editingRecord, lunch_exit_time: e.target.value })}
-                  className="col-span-3 font-mono"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="lunch_return_time" className="text-right">
-                  Retorno
-                </Label>
-                <Input
-                  id="lunch_return_time"
-                  type="time"
-                  value={editingRecord.lunch_return_time}
-                  onChange={(e) => setEditingRecord({ ...editingRecord, lunch_return_time: e.target.value })}
-                  className="col-span-3 font-mono"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="exit_time" className="text-right">
-                  Saída
-                </Label>
-                <Input
-                  id="exit_time"
-                  type="time"
-                  value={editingRecord.exit_time}
-                  onChange={(e) => setEditingRecord({ ...editingRecord, exit_time: e.target.value })}
-                  className="col-span-3 font-mono"
-                />
-              </div>
-            </div>
-          )}
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setEditDialogOpen(false);
-                setEditingRecord(null);
-              }}
-              disabled={savingEdit}
-            >
-              <X className="w-4 h-4 mr-2" />
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleSaveEdit}
-              disabled={savingEdit}
-            >
-              {savingEdit ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4 mr-2" />
-              )}
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   );
 };
