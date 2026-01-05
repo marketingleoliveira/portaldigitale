@@ -51,7 +51,6 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Ponto', href: '/ponto', icon: Clock, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
-  { label: 'Catálogo', href: '/produtos', icon: Package, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Categorias', href: '/categorias', icon: FolderOpen, roles: ['dev', 'admin'] },
   { label: 'Usuários', href: '/usuarios', icon: Users, roles: ['dev', 'admin'] },
   { label: 'Equipe', href: '/equipe', icon: UsersRound, roles: ['dev', 'admin', 'gerente', 'vendedor'] },

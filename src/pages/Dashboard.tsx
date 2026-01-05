@@ -136,20 +136,10 @@ const Dashboard: React.FC = () => {
 
   const statsCards = [
     {
-      title: 'Produtos',
-      value: stats.totalProducts,
-      icon: Package,
-      description: 'Total no catálogo',
-      color: 'text-primary',
-      bgColor: 'bg-primary/10',
-      href: '/produtos',
-      roles: ['dev', 'admin', 'gerente', 'vendedor'],
-    },
-    {
       title: 'Categorias',
       value: stats.totalCategories,
       icon: FolderOpen,
-      description: 'Organizando produtos',
+      description: 'Organizando arquivos',
       color: 'text-success',
       bgColor: 'bg-success/10',
       href: '/categorias',
@@ -193,20 +183,11 @@ const Dashboard: React.FC = () => {
 
   const quickActions = [
     {
-      title: 'Ver Catálogo',
-      description: 'Acesse todos os produtos',
-      icon: Package,
-      color: 'text-primary',
-      bgColor: 'bg-primary/10',
-      href: '/produtos',
-      roles: ['dev', 'admin', 'gerente', 'vendedor'],
-    },
-    {
       title: 'Materiais Comerciais',
       description: 'Fichas técnicas e catálogos',
       icon: FileText,
-      color: 'text-success',
-      bgColor: 'bg-success/10',
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
       href: '/downloads',
       roles: ['dev', 'admin', 'gerente', 'vendedor'],
     },
