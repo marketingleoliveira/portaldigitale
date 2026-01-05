@@ -45,6 +45,8 @@ interface Goal {
   is_active: boolean;
   created_by: string | null;
   created_at: string;
+  goal_type: 'team' | 'individual';
+  target_user_id: string | null;
 }
 
 interface GoalProgress {
@@ -132,6 +134,8 @@ const Goals: React.FC = () => {
     unit: 'unidades',
     period_type: 'monthly' as 'daily' | 'weekly' | 'monthly' | 'yearly',
     visible_to_roles: ['vendedor', 'gerente', 'admin', 'dev'] as AppRole[],
+    goal_type: 'team' as 'team' | 'individual',
+    target_user_id: '' as string,
   });
 
   const fetchData = async () => {
@@ -260,6 +264,8 @@ const Goals: React.FC = () => {
       unit: 'unidades',
       period_type: 'monthly',
       visible_to_roles: ['vendedor', 'gerente', 'admin', 'dev'],
+      goal_type: 'team',
+      target_user_id: '',
     });
     setEditingGoal(null);
   };
@@ -274,6 +280,8 @@ const Goals: React.FC = () => {
         unit: goal.unit,
         period_type: goal.period_type,
         visible_to_roles: goal.visible_to_roles,
+        goal_type: goal.goal_type || 'team',
+        target_user_id: goal.target_user_id || '',
       });
     } else {
       resetForm();
@@ -287,6 +295,11 @@ const Goals: React.FC = () => {
       return;
     }
 
+    if (formData.goal_type === 'individual' && !formData.target_user_id) {
+      toast.error('Selecione um vendedor para a meta individual');
+      return;
+    }
+
     setSaving(true);
     try {
       const goalData = {
@@ -297,6 +310,8 @@ const Goals: React.FC = () => {
         period_type: formData.period_type,
         visible_to_roles: formData.visible_to_roles,
         created_by: user?.id,
+        goal_type: formData.goal_type,
+        target_user_id: formData.goal_type === 'individual' ? formData.target_user_id : null,
       };
 
       if (editingGoal) {
@@ -405,9 +420,15 @@ const Goals: React.FC = () => {
   };
 
   const filteredGoals = useMemo(() => {
-    if (selectedTab === 'all') return goals;
-    return goals.filter(g => g.period_type === selectedTab);
+    let filtered = goals;
+    if (selectedTab !== 'all') {
+      filtered = filtered.filter(g => g.period_type === selectedTab);
+    }
+    return filtered;
   }, [goals, selectedTab]);
+
+  const teamGoals = useMemo(() => filteredGoals.filter(g => g.goal_type === 'team'), [filteredGoals]);
+  const individualGoals = useMemo(() => filteredGoals.filter(g => g.goal_type === 'individual'), [filteredGoals]);
 
   const stats = useMemo(() => {
     const totalGoals = goals.length;
@@ -547,7 +568,7 @@ const Goals: React.FC = () => {
         {/* Main content: Goals (left) and Ranking (right) */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Goals Section - Left (2 columns) */}
-          <div className="xl:col-span-2 space-y-4">
+          <div className="xl:col-span-2 space-y-6">
             {/* Tabs for filtering */}
             <Tabs value={selectedTab} onValueChange={setSelectedTab}>
               <TabsList>
@@ -557,23 +578,30 @@ const Goals: React.FC = () => {
                 <TabsTrigger value="monthly">Mensais</TabsTrigger>
                 <TabsTrigger value="yearly">Anuais</TabsTrigger>
               </TabsList>
+            </Tabs>
 
-              <TabsContent value={selectedTab} className="mt-6">
-                {filteredGoals.length === 0 ? (
-                  <Card>
-                    <CardContent className="py-12 text-center">
-                      <Target className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">Nenhuma meta encontrada</h3>
-                      <p className="text-muted-foreground">
-                        {isAdmin
-                          ? 'Crie uma nova meta para começar a acompanhar o progresso.'
-                          : 'Aguarde a criação de metas pelo administrador.'}
-                      </p>
-                    </CardContent>
-                  </Card>
+            {/* Team Goals Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary" />
+                  Metas da Equipe
+                </CardTitle>
+                <CardDescription>
+                  Metas compartilhadas para toda a equipe
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {teamGoals.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <Target className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">
+                      Nenhuma meta de equipe encontrada
+                    </p>
+                  </div>
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {filteredGoals.map(goal => {
+                    {teamGoals.map(goal => {
                       const currentProgress = getProgressForGoal(goal.id);
                       const percentage = calculatePercentage(currentProgress, goal.target_value);
                       const isAchieved = currentProgress >= goal.target_value;
@@ -583,7 +611,7 @@ const Goals: React.FC = () => {
                         <Card
                           key={goal.id}
                           className={`relative overflow-hidden transition-all ${
-                            isAchieved ? 'border-green-500/50 bg-green-500/5' : ''
+                            isAchieved ? 'border-green-500/50 bg-green-500/5' : 'bg-muted/20'
                           }`}
                         >
                           {isAchieved && (
@@ -603,9 +631,9 @@ const Goals: React.FC = () => {
                                     {periodLabels[goal.period_type]}
                                   </Badge>
                                 </div>
-                                <CardTitle className="text-lg">{goal.title}</CardTitle>
+                                <CardTitle className="text-base">{goal.title}</CardTitle>
                                 {goal.description && (
-                                  <CardDescription className="mt-1">
+                                  <CardDescription className="mt-1 text-xs">
                                     {goal.description}
                                   </CardDescription>
                                 )}
@@ -615,6 +643,7 @@ const Goals: React.FC = () => {
                                   <Button
                                     variant="ghost"
                                     size="icon"
+                                    className="h-8 w-8"
                                     onClick={() => handleOpenDialog(goal)}
                                   >
                                     <Edit className="w-4 h-4" />
@@ -622,6 +651,7 @@ const Goals: React.FC = () => {
                                   <Button
                                     variant="ghost"
                                     size="icon"
+                                    className="h-8 w-8"
                                     onClick={() => handleDeleteGoal(goal.id)}
                                   >
                                     <Trash2 className="w-4 h-4 text-destructive" />
@@ -638,10 +668,10 @@ const Goals: React.FC = () => {
                                   {formatValue(currentProgress, goal.unit)} / {formatValue(goal.target_value, goal.unit)}
                                 </span>
                               </div>
-                              <Progress value={percentage} className="h-3" />
+                              <Progress value={percentage} className="h-2" />
                               <div className="flex items-center justify-between">
                                 <span
-                                  className={`text-sm font-medium ${
+                                  className={`text-xs font-medium ${
                                     isAchieved ? 'text-green-500' : 'text-muted-foreground'
                                   }`}
                                 >
@@ -652,7 +682,7 @@ const Goals: React.FC = () => {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => handleOpenProgressDialog(goal)}
-                                    className="gap-1"
+                                    className="gap-1 h-7 text-xs"
                                   >
                                     <TrendingUp className="w-3 h-3" />
                                     Atualizar
@@ -666,9 +696,9 @@ const Goals: React.FC = () => {
                               <div className="mt-4 pt-4 border-t">
                                 <div className="flex items-center gap-2 mb-3">
                                   <Users className="w-4 h-4 text-muted-foreground" />
-                                  <span className="text-sm font-medium">Progresso da Equipe</span>
+                                  <span className="text-xs font-medium">Progresso da Equipe</span>
                                 </div>
-                                <div className="space-y-2 max-h-32 overflow-y-auto">
+                                <div className="space-y-2 max-h-28 overflow-y-auto">
                                   {teamProgress.users.slice(0, 5).map((up, idx) => {
                                     const userPercentage = calculatePercentage(
                                       up.value,
@@ -678,13 +708,13 @@ const Goals: React.FC = () => {
                                     return (
                                       <div
                                         key={up.userId}
-                                        className="flex items-center justify-between text-sm"
+                                        className="flex items-center justify-between text-xs"
                                       >
                                         <div className="flex items-center gap-2">
                                           {idx === 0 && teamProgress.users.length > 1 && (
                                             <ChevronUp className="w-3 h-3 text-green-500" />
                                           )}
-                                          <span className="truncate max-w-[120px]">
+                                          <span className="truncate max-w-[100px]">
                                             {up.profile?.full_name || 'Usuário'}
                                           </span>
                                         </div>
@@ -700,7 +730,7 @@ const Goals: React.FC = () => {
                                             <Button
                                               variant="ghost"
                                               size="icon"
-                                              className="h-6 w-6"
+                                              className="h-5 w-5"
                                               onClick={() => handleOpenProgressDialog(goal, up.userId)}
                                             >
                                               <Edit className="w-3 h-3" />
@@ -719,8 +749,130 @@ const Goals: React.FC = () => {
                     })}
                   </div>
                 )}
-              </TabsContent>
-            </Tabs>
+              </CardContent>
+            </Card>
+
+            {/* Individual Goals Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="w-5 h-5 text-amber-500" />
+                  Metas Individuais
+                </CardTitle>
+                <CardDescription>
+                  Metas atribuídas para vendedores específicos
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {individualGoals.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <Target className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">
+                      Nenhuma meta individual encontrada
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {individualGoals.map(goal => {
+                      const targetUser = users.find(u => u.id === goal.target_user_id);
+                      const currentProgress = getProgressForGoal(goal.id, goal.target_user_id || undefined);
+                      const percentage = calculatePercentage(currentProgress, goal.target_value);
+                      const isAchieved = currentProgress >= goal.target_value;
+
+                      return (
+                        <Card
+                          key={goal.id}
+                          className={`relative overflow-hidden transition-all ${
+                            isAchieved ? 'border-green-500/50 bg-green-500/5' : 'bg-muted/20'
+                          }`}
+                        >
+                          {isAchieved && (
+                            <div className="absolute top-3 right-3">
+                              <Trophy className="w-6 h-6 text-green-500" />
+                            </div>
+                          )}
+                          <CardHeader className="pb-2">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge
+                                    variant="outline"
+                                    className={periodColors[goal.period_type]}
+                                  >
+                                    <Calendar className="w-3 h-3 mr-1" />
+                                    {periodLabels[goal.period_type]}
+                                  </Badge>
+                                  <Badge variant="secondary" className="text-xs">
+                                    {targetUser?.full_name || 'Vendedor'}
+                                  </Badge>
+                                </div>
+                                <CardTitle className="text-base">{goal.title}</CardTitle>
+                                {goal.description && (
+                                  <CardDescription className="mt-1 text-xs">
+                                    {goal.description}
+                                  </CardDescription>
+                                )}
+                              </div>
+                              {isDev && (
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => handleOpenDialog(goal)}
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => handleDeleteGoal(goal.id)}
+                                  >
+                                    <Trash2 className="w-4 h-4 text-destructive" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Progresso</span>
+                                <span className="font-semibold">
+                                  {formatValue(currentProgress, goal.unit)} / {formatValue(goal.target_value, goal.unit)}
+                                </span>
+                              </div>
+                              <Progress value={percentage} className="h-2" />
+                              <div className="flex items-center justify-between">
+                                <span
+                                  className={`text-xs font-medium ${
+                                    isAchieved ? 'text-green-500' : 'text-muted-foreground'
+                                  }`}
+                                >
+                                  {percentage}% completo
+                                </span>
+                                {isDev && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleOpenProgressDialog(goal, goal.target_user_id || undefined)}
+                                    className="gap-1 h-7 text-xs"
+                                  >
+                                    <TrendingUp className="w-3 h-3" />
+                                    Atualizar
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           {/* Seller Ranking - Right (1 column) */}
@@ -809,6 +961,57 @@ const Goals: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Goal Type Selection */}
+            <div className="space-y-2">
+              <Label>Tipo de Meta *</Label>
+              <Select
+                value={formData.goal_type}
+                onValueChange={(value: 'team' | 'individual') => 
+                  setFormData({ ...formData, goal_type: value, target_user_id: '' })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="team">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      Meta de Equipe
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="individual">
+                    <div className="flex items-center gap-2">
+                      <Target className="w-4 h-4" />
+                      Meta Individual
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* User Selection for Individual Goals */}
+            {formData.goal_type === 'individual' && (
+              <div className="space-y-2">
+                <Label>Vendedor *</Label>
+                <Select
+                  value={formData.target_user_id}
+                  onValueChange={(value) => setFormData({ ...formData, target_user_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um vendedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map(u => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.full_name} {u.region && `(${u.region})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="title">Título *</Label>
               <Input

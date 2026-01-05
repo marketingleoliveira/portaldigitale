@@ -219,9 +219,11 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           description: string | null
+          goal_type: string
           id: string
           is_active: boolean | null
           period_type: string
+          target_user_id: string | null
           target_value: number
           title: string
           unit: string
@@ -232,9 +234,11 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           description?: string | null
+          goal_type?: string
           id?: string
           is_active?: boolean | null
           period_type: string
+          target_user_id?: string | null
           target_value: number
           title: string
           unit?: string
@@ -245,9 +249,11 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           description?: string | null
+          goal_type?: string
           id?: string
           is_active?: boolean | null
           period_type?: string
+          target_user_id?: string | null
           target_value?: number
           title?: string
           unit?: string
