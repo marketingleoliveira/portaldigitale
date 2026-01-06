@@ -133,13 +133,74 @@ const Localizar: React.FC = () => {
           schema: 'public',
           table: 'user_locations',
         },
-        (payload) => {
-          // Remove user from awaiting list when location is updated
-          const newData = payload.new as { user_id?: string } | null;
+        async (payload) => {
+          const newData = payload.new as { user_id?: string; city?: string; region?: string } | null;
+          
           if (newData?.user_id) {
+            // Check if this user was in our awaiting list
+            const wasAwaiting = awaitingLocationIds.includes(newData.user_id);
+            
+            // Remove user from awaiting list
             setAwaitingLocationIds(prev => prev.filter(id => id !== newData.user_id));
+            
+            // If user shared location after our request, show success toast
+            if (wasAwaiting && newData.city) {
+              // Get user name from profiles
+              const profile = profiles.find(p => p.id === newData.user_id);
+              toast({
+                title: '📍 Localização recebida!',
+                description: `${profile?.full_name || 'Vendedor'} compartilhou sua localização: ${newData.city}, ${newData.region}`,
+                duration: 5000,
+              });
+            }
           }
-          fetchLocations();
+          
+          // Refresh locations silently (without showing the default toast)
+          try {
+            const { data: vendedores } = await supabase
+              .from('user_roles')
+              .select('user_id')
+              .eq('role', 'vendedor');
+
+            const vendedorIdsList = vendedores?.map(v => v.user_id) || [];
+
+            if (vendedorIdsList.length === 0) return;
+
+            const { data: locationsData } = await supabase
+              .from('user_locations')
+              .select('*')
+              .in('user_id', vendedorIdsList);
+
+            const { data: profilesData } = await supabase
+              .from('profiles')
+              .select('id, full_name, email, avatar_url')
+              .in('id', vendedorIdsList);
+
+            const locationsWithProfiles = (locationsData || []).map(loc => ({
+              ...loc,
+              profile: profilesData?.find(p => p.id === loc.user_id),
+            }));
+
+            const vendedoresWithoutLocation = vendedorIdsList
+              .filter(id => !locationsData?.find(loc => loc.user_id === id))
+              .map(id => ({
+                id: id,
+                user_id: id,
+                ip_address: null,
+                latitude: null,
+                longitude: null,
+                city: null,
+                region: null,
+                country: null,
+                last_updated: '',
+                profile: profilesData?.find(p => p.id === id),
+              }));
+
+            setLocations([...locationsWithProfiles, ...vendedoresWithoutLocation]);
+            if (profilesData) setProfiles(profilesData);
+          } catch (error) {
+            console.error('Error refreshing locations:', error);
+          }
         }
       )
       .subscribe();
@@ -147,7 +208,7 @@ const Localizar: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [awaitingLocationIds, profiles]);
 
   const checkOnlineStatus = (userId: string, lastUpdated: string) => {
     // First check presence system
