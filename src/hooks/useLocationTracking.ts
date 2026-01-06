@@ -44,7 +44,8 @@ export const useLocationTracking = () => {
   const lastLocationRef = useRef<string | null>(null);
   const isUpdatingRef = useRef(false);
 
-  const updateLocation = useCallback(async () => {
+  const updateLocation = useCallback(async (force: boolean = false) => {
+    if (!user?.id || (isUpdatingRef.current && !force)) return;
     if (!user?.id || isUpdatingRef.current) return;
     
     isUpdatingRef.current = true;
@@ -113,8 +114,25 @@ export const useLocationTracking = () => {
     updateLocation();
 
     // Update location every 5 minutes
-    const interval = setInterval(updateLocation, 5 * 60 * 1000);
+    const interval = setInterval(() => updateLocation(), 5 * 60 * 1000);
 
-    return () => clearInterval(interval);
+    // Listen for forced location update requests
+    const channel = supabase
+      .channel('location-update-request')
+      .on('broadcast', { event: 'request-location-update' }, (payload) => {
+        const userIds = payload.payload?.user_ids || [];
+        if (userIds.includes(user.id)) {
+          console.log('Received forced location update request');
+          updateLocation(true);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   }, [user?.id, updateLocation]);
+
+  return { updateLocation };
 };

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { MapPin, Clock, Globe, Loader2, RefreshCw, Wifi, WifiOff, Map, List, History, Users } from 'lucide-react';
+import { MapPin, Clock, Globe, Loader2, RefreshCw, Wifi, WifiOff, Map, List, History, Users, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -35,6 +35,7 @@ const Localizar: React.FC = () => {
   const [vendedorIds, setVendedorIds] = useState<string[]>([]);
   const [profiles, setProfiles] = useState<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [requestingLocation, setRequestingLocation] = useState(false);
   const { toast } = useToast();
   const { isUserOnline, onlineCount } = useOnlineUsers();
 
@@ -152,6 +153,36 @@ const Localizar: React.FC = () => {
     }
   };
 
+  const requestLocationUpdate = async () => {
+    setRequestingLocation(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('notify-location-update');
+      
+      if (error) throw error;
+      
+      toast({
+        title: 'Solicitação enviada',
+        description: `Solicitação de localização enviada para ${data?.usersWithoutLocation || 0} vendedores online sem localização.`,
+      });
+      
+      // Refresh locations after a short delay
+      setTimeout(fetchLocations, 3000);
+    } catch (error) {
+      console.error('Error requesting location update:', error);
+      toast({
+        title: 'Erro ao solicitar atualização',
+        description: 'Não foi possível enviar a solicitação de localização.',
+        variant: 'destructive',
+      });
+    } finally {
+      setRequestingLocation(false);
+    }
+  };
+
+  const onlineWithoutLocation = locations.filter(l => 
+    checkOnlineStatus(l.user_id, l.last_updated) && l.latitude == null
+  ).length;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -168,6 +199,17 @@ const Localizar: React.FC = () => {
               <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
               {locations.filter(l => checkOnlineStatus(l.user_id, l.last_updated)).length} online
             </Badge>
+            {onlineWithoutLocation > 0 && (
+              <Button 
+                onClick={requestLocationUpdate} 
+                variant="default" 
+                disabled={requestingLocation}
+                className="gap-2"
+              >
+                <Radio className={`w-4 h-4 ${requestingLocation ? 'animate-pulse' : ''}`} />
+                Solicitar Localização ({onlineWithoutLocation})
+              </Button>
+            )}
             <Button onClick={fetchLocations} variant="outline" disabled={loading}>
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
