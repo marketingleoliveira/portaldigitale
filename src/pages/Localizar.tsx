@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { MapPin, Clock, Globe, Loader2, RefreshCw, Wifi, WifiOff, Map, List, History, Users, Radio } from 'lucide-react';
+import { MapPin, Clock, Globe, Loader2, RefreshCw, Wifi, WifiOff, Map, List, History, Users, Radio, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -27,13 +27,14 @@ interface UserLocation {
     full_name: string;
     email: string;
     avatar_url: string | null;
+    location_sharing_enabled: boolean | null;
   };
 }
 
 const Localizar: React.FC = () => {
   const [locations, setLocations] = useState<UserLocation[]>([]);
   const [vendedorIds, setVendedorIds] = useState<string[]>([]);
-  const [profiles, setProfiles] = useState<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; full_name: string; avatar_url: string | null; location_sharing_enabled: boolean | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [requestingLocation, setRequestingLocation] = useState(false);
   const [awaitingLocationIds, setAwaitingLocationIds] = useState<string[]>([]);
@@ -42,7 +43,7 @@ const Localizar: React.FC = () => {
   
   // Refs to access current values in realtime callback without causing re-subscription
   const awaitingLocationIdsRef = useRef<string[]>([]);
-  const profilesRef = useRef<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
+  const profilesRef = useRef<{ id: string; full_name: string; avatar_url: string | null; location_sharing_enabled: boolean | null }[]>([]);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -84,7 +85,7 @@ const Localizar: React.FC = () => {
       // Get profiles for these users
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, full_name, email, avatar_url')
+        .select('id, full_name, email, avatar_url, location_sharing_enabled')
         .in('id', vendedorIdsList);
 
       if (profilesError) throw profilesError;
@@ -186,7 +187,7 @@ const Localizar: React.FC = () => {
 
             const { data: profilesData } = await supabase
               .from('profiles')
-              .select('id, full_name, email, avatar_url')
+              .select('id, full_name, email, avatar_url, location_sharing_enabled')
               .in('id', vendedorIdsList);
 
             const locationsWithProfiles = (locationsData || []).map(loc => ({
@@ -284,11 +285,19 @@ const Localizar: React.FC = () => {
               Acompanhe a geolocalização em tempo real dos vendedores
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="gap-1 px-3 py-1.5">
               <Users className="w-4 h-4" />
-              <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               {locations.filter(l => checkOnlineStatus(l.user_id, l.last_updated)).length} online
+            </Badge>
+            <Badge variant="outline" className="gap-1 px-3 py-1.5 text-green-600 border-green-200 bg-green-50">
+              <CheckCircle2 className="w-4 h-4" />
+              {locations.filter(l => l.profile?.location_sharing_enabled === true).length} auto
+            </Badge>
+            <Badge variant="outline" className="gap-1 px-3 py-1.5 text-muted-foreground">
+              <HelpCircle className="w-4 h-4" />
+              {locations.filter(l => l.profile?.location_sharing_enabled === null).length} pendentes
             </Badge>
             {onlineWithoutLocation > 0 && (
               <Button 
@@ -395,16 +404,35 @@ const Localizar: React.FC = () => {
                         </CardDescription>
                       </div>
                     </div>
-                    <Badge 
-                      variant={checkOnlineStatus(location.user_id, location.last_updated) ? 'default' : 'secondary'}
-                      className={checkOnlineStatus(location.user_id, location.last_updated) ? 'bg-green-500' : ''}
-                    >
-                      {checkOnlineStatus(location.user_id, location.last_updated) ? (
-                        <><Wifi className="w-3 h-3 mr-1" /> Online</>
+                    <div className="flex flex-col gap-1 items-end">
+                      <Badge 
+                        variant={checkOnlineStatus(location.user_id, location.last_updated) ? 'default' : 'secondary'}
+                        className={checkOnlineStatus(location.user_id, location.last_updated) ? 'bg-green-500' : ''}
+                      >
+                        {checkOnlineStatus(location.user_id, location.last_updated) ? (
+                          <><Wifi className="w-3 h-3 mr-1" /> Online</>
+                        ) : (
+                          <><WifiOff className="w-3 h-3 mr-1" /> Offline</>
+                        )}
+                      </Badge>
+                      {/* Location sharing status badge */}
+                      {location.profile?.location_sharing_enabled === true ? (
+                        <Badge variant="outline" className="text-xs gap-1 text-green-600 border-green-200 bg-green-50">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Auto
+                        </Badge>
+                      ) : location.profile?.location_sharing_enabled === false ? (
+                        <Badge variant="outline" className="text-xs gap-1 text-red-600 border-red-200 bg-red-50">
+                          <XCircle className="w-3 h-3" />
+                          Recusado
+                        </Badge>
                       ) : (
-                        <><WifiOff className="w-3 h-3 mr-1" /> Offline</>
+                        <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                          <HelpCircle className="w-3 h-3" />
+                          Pendente
+                        </Badge>
                       )}
-                    </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
