@@ -58,10 +58,8 @@ Digitale Têxtil<span className="text-primary block mt-2">Digitale Têxtil</span
               <div className="w-14 h-14 mx-auto mb-4 rounded-xl gradient-primary flex items-center justify-center">
                 <Package className="w-7 h-7 text-primary-foreground" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">Catálogo Digital</h3>
-              <p className="text-muted-foreground">
-                Acesse produtos, preços e condições comerciais atualizadas em tempo real.
-              </p>
+              <h3 className="text-lg font-semibold mb-2">Arquivos para Baixar</h3>
+              <p className="text-muted-foreground">Uma biblioteca de arquivos para facilitar seu dia-a-dia, chega de servidor local, o FUTURO CHEGOU!.</p>
             </div>
             <div className="text-center p-6 bg-card rounded-xl shadow-sm animate-fade-in" style={{
             animationDelay: '0.2s'
@@ -81,9 +79,7 @@ Digitale Têxtil<span className="text-primary block mt-2">Digitale Têxtil</span
                 <Shield className="w-7 h-7 text-role-admin" />
               </div>
               <h3 className="text-lg font-semibold mb-2">Seguro e Confiável</h3>
-              <p className="text-muted-foreground">
-                Sistema seguro com controle de permissões e autenticação robusta.
-              </p>
+              <p className="text-muted-foreground">Sistema seguro com controle de permissões e autenticação robusta seguindo todos os parâmetros e regras da LGPD.</p>
             </div>
           </div>
         </div>
