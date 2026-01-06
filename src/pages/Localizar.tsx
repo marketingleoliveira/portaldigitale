@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { MapPin, Clock, Globe, Loader2, RefreshCw, Wifi, WifiOff, Map, List, History, Users, Radio, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
+import { MapPin, Clock, Globe, Loader2, RefreshCw, Wifi, WifiOff, Map, List, History, Users, Radio, CheckCircle2, XCircle, HelpCircle, Satellite, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -23,6 +23,7 @@ interface UserLocation {
   region: string | null;
   country: string | null;
   last_updated: string;
+  location_source: string | null;
   profile?: {
     full_name: string;
     email: string;
@@ -111,6 +112,7 @@ const Localizar: React.FC = () => {
           region: null,
           country: null,
           last_updated: '',
+          location_source: null,
           profile: profilesData?.find(p => p.id === id),
         }));
 
@@ -207,6 +209,7 @@ const Localizar: React.FC = () => {
                 region: null,
                 country: null,
                 last_updated: '',
+                location_source: null,
                 profile: profilesData?.find(p => p.id === id),
               }));
 
@@ -437,7 +440,7 @@ const Localizar: React.FC = () => {
                               
                               {/* Location or status */}
                               {location.city ? (
-                                <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                                <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground flex-wrap">
                                   <span className="flex items-center gap-1">
                                     <MapPin className="w-3.5 h-3.5" />
                                     {location.city}, {location.region}
@@ -449,6 +452,18 @@ const Localizar: React.FC = () => {
                                       locale: ptBR 
                                     })}
                                   </span>
+                                  {/* Location source indicator */}
+                                  {location.location_source === 'gps' ? (
+                                    <span className="flex items-center gap-1 text-green-600">
+                                      <Satellite className="w-3.5 h-3.5" />
+                                      GPS
+                                    </span>
+                                  ) : location.location_source === 'ip' ? (
+                                    <span className="flex items-center gap-1 text-amber-600">
+                                      <Network className="w-3.5 h-3.5" />
+                                      IP
+                                    </span>
+                                  ) : null}
                                 </div>
                               ) : isAwaiting ? (
                                 <div className="flex items-center gap-2 mt-1 text-sm text-primary">

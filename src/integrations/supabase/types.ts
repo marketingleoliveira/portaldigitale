@@ -744,6 +744,7 @@ export type Database = {
           id: string
           ip_address: string | null
           latitude: number | null
+          location_source: string | null
           longitude: number | null
           recorded_at: string
           region: string | null
@@ -755,6 +756,7 @@ export type Database = {
           id?: string
           ip_address?: string | null
           latitude?: number | null
+          location_source?: string | null
           longitude?: number | null
           recorded_at?: string
           region?: string | null
@@ -766,6 +768,7 @@ export type Database = {
           id?: string
           ip_address?: string | null
           latitude?: number | null
+          location_source?: string | null
           longitude?: number | null
           recorded_at?: string
           region?: string | null
@@ -782,6 +785,7 @@ export type Database = {
           ip_address: string | null
           last_updated: string
           latitude: number | null
+          location_source: string | null
           longitude: number | null
           region: string | null
           user_id: string
@@ -794,6 +798,7 @@ export type Database = {
           ip_address?: string | null
           last_updated?: string
           latitude?: number | null
+          location_source?: string | null
           longitude?: number | null
           region?: string | null
           user_id: string
@@ -806,6 +811,7 @@ export type Database = {
           ip_address?: string | null
           last_updated?: string
           latitude?: number | null
+          location_source?: string | null
           longitude?: number | null
           region?: string | null
           user_id?: string

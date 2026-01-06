@@ -9,6 +9,7 @@ interface GeoLocationData {
   city: string;
   region: string;
   country: string;
+  source: 'gps' | 'ip';
 }
 
 // Get precise location using browser's Geolocation API (GPS)
@@ -81,6 +82,7 @@ const fetchGeoLocation = async (): Promise<GeoLocationData | null> => {
         city: locationInfo.city,
         region: locationInfo.region,
         country: locationInfo.country,
+        source: 'gps' as const,
       };
     } catch (gpsError) {
       console.log('GPS failed, falling back to IP geolocation:', gpsError);
@@ -102,6 +104,7 @@ const fetchGeoLocation = async (): Promise<GeoLocationData | null> => {
         city: data.city || 'Unknown',
         region: data.region || 'Unknown',
         country: data.country || 'Unknown',
+        source: 'ip' as const,
       };
     }
     
@@ -144,6 +147,7 @@ export const useLocationTracking = () => {
           city: geoData.city,
           region: geoData.region,
           country: geoData.country,
+          location_source: geoData.source,
           last_updated: new Date().toISOString(),
         }, {
           onConflict: 'user_id',
@@ -167,6 +171,7 @@ export const useLocationTracking = () => {
             city: geoData.city,
             region: geoData.region,
             country: geoData.country,
+            location_source: geoData.source,
           });
 
         if (historyError) {
