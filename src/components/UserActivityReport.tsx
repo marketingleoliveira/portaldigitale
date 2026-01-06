@@ -42,6 +42,10 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
 
   useEffect(() => {
     fetchActivityData();
+    
+    // Auto-refresh every 10 seconds for real-time accuracy
+    const interval = setInterval(fetchActivityData, 10000);
+    return () => clearInterval(interval);
   }, [period]);
 
   const getDateRange = () => {
@@ -76,22 +80,33 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
 
       if (profilesError) throw profilesError;
 
-      // Fetch activity sessions within the period
-      const { data: sessions, error: sessionsError } = await supabase
+      // Fetch completed activity sessions within the period
+      const { data: completedSessions, error: sessionsError } = await supabase
         .from('user_activity_sessions')
-        .select('user_id, duration_seconds')
+        .select('user_id, duration_seconds, session_start, session_end')
         .gte('session_start', start)
         .lte('session_start', end);
 
       if (sessionsError) throw sessionsError;
 
-      // Aggregate by user
+      // Aggregate by user - include all sessions (completed and ongoing)
       const userActivity = new Map<string, { total: number; count: number }>();
       
-      (sessions || []).forEach(session => {
+      (completedSessions || []).forEach(session => {
         const existing = userActivity.get(session.user_id) || { total: 0, count: 0 };
+        
+        // Use duration_seconds if available, otherwise calculate from timestamps
+        let duration = session.duration_seconds || 0;
+        
+        // If session has no end time (still active), calculate current duration
+        if (!session.session_end && session.session_start) {
+          const sessionStart = new Date(session.session_start).getTime();
+          const now = Date.now();
+          duration = Math.floor((now - sessionStart) / 1000);
+        }
+        
         userActivity.set(session.user_id, {
-          total: existing.total + (session.duration_seconds || 0),
+          total: existing.total + duration,
           count: existing.count + 1,
         });
       });
@@ -119,15 +134,19 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
   };
 
   const formatDuration = (seconds: number) => {
-    if (seconds === 0) return '0min';
+    if (seconds === 0) return '0s';
     
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
 
     if (hours > 0) {
-      return `${hours}h ${minutes}min`;
+      return `${hours}h ${minutes}min ${secs}s`;
     }
-    return `${minutes}min`;
+    if (minutes > 0) {
+      return `${minutes}min ${secs}s`;
+    }
+    return `${secs}s`;
   };
 
   const getPeriodLabel = () => {
