@@ -365,6 +365,35 @@ const Reports: React.FC = () => {
       const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 20;
 
+      // Load logo image
+      const loadImage = (src: string): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+          };
+          img.onerror = reject;
+          img.src = src;
+        });
+      };
+
+      // Try to add logo
+      try {
+        const logoUrl = (await import('@/assets/logo-digitale-full.png')).default;
+        const logoBase64 = await loadImage(logoUrl);
+        const logoWidth = 50;
+        const logoHeight = 15;
+        doc.addImage(logoBase64, 'PNG', margin, 10, logoWidth, logoHeight);
+      } catch (logoError) {
+        console.warn('Could not load logo:', logoError);
+      }
+
       // Header
       doc.setFontSize(18);
       doc.setFont('helvetica', 'bold');
