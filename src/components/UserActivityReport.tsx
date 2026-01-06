@@ -47,8 +47,8 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
   useEffect(() => {
     fetchActivityData();
     
-    // Auto-refresh every 10 seconds for real-time accuracy
-    const interval = setInterval(fetchActivityData, 10000);
+    // Auto-refresh every 1 second for real-time accuracy
+    const interval = setInterval(fetchActivityData, 1000);
     return () => clearInterval(interval);
   }, []);
 
