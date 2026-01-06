@@ -33,6 +33,7 @@ import {
   Loader2,
   Clock,
   Rocket,
+  UserX,
 } from 'lucide-react';
 import { useTimeClockReminder } from '@/hooks/useTimeClockReminder';
 import { cn } from '@/lib/utils';
@@ -56,6 +57,7 @@ const navItems: NavItem[] = [
   { label: 'Metas', href: '/metas', icon: Target, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Categorias', href: '/categorias', icon: FolderOpen, roles: ['dev', 'admin'] },
   { label: 'Usuários', href: '/usuarios', icon: Users, roles: ['dev', 'admin'] },
+  { label: 'Inativos', href: '/inativos', icon: UserX, roles: ['dev', 'admin'] },
   { label: 'Equipe', href: '/equipe', icon: UsersRound, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Arquivos', href: '/arquivos', icon: Upload, roles: ['dev', 'admin'] },
   { label: 'Relatórios', href: '/relatorios', icon: BarChart3, roles: ['dev', 'admin', 'gerente'] },
