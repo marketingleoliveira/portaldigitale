@@ -55,19 +55,23 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
   const getDateRanges = () => {
     const now = new Date();
     
-    // Day: start of today
-    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Day: last 24 hours
+    const dayStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     
-    // Week: 7 days ago
-    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // Week: Monday to Friday of current week
+    const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysFromMonday);
+    weekStart.setHours(0, 0, 0, 0);
     
-    // Month: start of current month
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    // Month: last 30 days
+    const monthStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     return {
-      day: { start: dayStart.toISOString(), end: now.toISOString() },
-      week: { start: weekStart.toISOString(), end: now.toISOString() },
-      month: { start: monthStart.toISOString(), end: now.toISOString() },
+      day: { start: dayStart.getTime() },
+      week: { start: weekStart.getTime() },
+      month: { start: monthStart.getTime() },
+      queryStart: monthStart.toISOString(), // For DB query (furthest back)
     };
   };
 
@@ -84,20 +88,18 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
 
       if (profilesError) throw profilesError;
 
-      // Fetch all sessions from the start of month (covers all periods)
+      // Fetch all sessions from the last 30 days (covers all periods)
       const { data: allSessions, error: sessionsError } = await supabase
         .from('user_activity_sessions')
         .select('user_id, duration_seconds, session_start, session_end')
-        .gte('session_start', ranges.month.start);
+        .gte('session_start', ranges.queryStart);
 
       if (sessionsError) throw sessionsError;
 
       // Aggregate by user for each period
       const userActivityMap = new Map<string, { day: PeriodActivity; week: PeriodActivity; month: PeriodActivity }>();
       
-      const dayStart = new Date(ranges.day.start).getTime();
-      const weekStart = new Date(ranges.week.start).getTime();
-      const monthStart = new Date(ranges.month.start).getTime();
+      const { day: dayRange, week: weekRange, month: monthRange } = ranges;
 
       (allSessions || []).forEach(session => {
         const sessionStart = new Date(session.session_start).getTime();
@@ -114,18 +116,20 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
           month: { total_duration: 0, session_count: 0 },
         };
 
-        // Add to month (all sessions in this query are within month)
-        existing.month.total_duration += duration;
-        existing.month.session_count += 1;
+        // Add to month if within 30 days
+        if (sessionStart >= monthRange.start) {
+          existing.month.total_duration += duration;
+          existing.month.session_count += 1;
+        }
 
-        // Add to week if within week range
-        if (sessionStart >= weekStart) {
+        // Add to week if within week range (Monday to now)
+        if (sessionStart >= weekRange.start) {
           existing.week.total_duration += duration;
           existing.week.session_count += 1;
         }
 
-        // Add to day if within day range
-        if (sessionStart >= dayStart) {
+        // Add to day if within last 24 hours
+        if (sessionStart >= dayRange.start) {
           existing.day.total_duration += duration;
           existing.day.session_count += 1;
         }
