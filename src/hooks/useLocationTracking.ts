@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -13,20 +13,26 @@ interface GeoLocationData {
 
 const fetchGeoLocation = async (): Promise<GeoLocationData | null> => {
   try {
-    // Use ip-api.com (free, no API key required)
-    const response = await fetch('http://ip-api.com/json/?fields=status,message,country,regionName,city,lat,lon,query');
+    // Use ipapi.co with HTTPS (CORS friendly)
+    const response = await fetch('https://ipapi.co/json/', {
+      headers: { 'Accept': 'application/json' }
+    });
+    
+    if (!response.ok) throw new Error('API error');
+    
     const data = await response.json();
     
-    if (data.status === 'success') {
+    if (data.ip && data.latitude) {
       return {
-        ip: data.query,
-        latitude: data.lat,
-        longitude: data.lon,
-        city: data.city,
-        region: data.regionName,
-        country: data.country,
+        ip: data.ip,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        city: data.city || 'Unknown',
+        region: data.region || 'Unknown',
+        country: data.country_name || 'Unknown',
       };
     }
+    
     return null;
   } catch (error) {
     console.error('Error fetching geolocation:', error);
@@ -37,13 +43,19 @@ const fetchGeoLocation = async (): Promise<GeoLocationData | null> => {
 export const useLocationTracking = () => {
   const { user } = useAuth();
   const lastLocationRef = useRef<string | null>(null);
+  const isUpdatingRef = useRef(false);
 
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const updateLocation = async () => {
+  const updateLocation = useCallback(async () => {
+    if (!user?.id || isUpdatingRef.current) return;
+    
+    isUpdatingRef.current = true;
+    
+    try {
       const geoData = await fetchGeoLocation();
-      if (!geoData) return;
+      if (!geoData) {
+        console.log('Could not fetch geolocation data');
+        return;
+      }
 
       // Create a location signature to avoid duplicate entries
       const locationSignature = `${geoData.latitude},${geoData.longitude}`;
@@ -66,6 +78,8 @@ export const useLocationTracking = () => {
 
       if (upsertError) {
         console.error('Error updating location:', upsertError);
+      } else {
+        console.log('Location updated successfully:', geoData.city);
       }
 
       // Add to history only if location changed or first entry
@@ -88,7 +102,13 @@ export const useLocationTracking = () => {
           lastLocationRef.current = locationSignature;
         }
       }
-    };
+    } finally {
+      isUpdatingRef.current = false;
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
 
     // Update location immediately
     updateLocation();
@@ -97,5 +117,5 @@ export const useLocationTracking = () => {
     const interval = setInterval(updateLocation, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [user?.id]);
+  }, [user?.id, updateLocation]);
 };

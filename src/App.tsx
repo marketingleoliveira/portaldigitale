@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { useUserPresence } from "@/hooks/useUserPresence";
 
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -33,6 +34,12 @@ import Localizar from "./pages/Localizar";
 
 const queryClient = new QueryClient();
 
+// Component to track user presence
+const PresenceTracker = ({ children }: { children: React.ReactNode }) => {
+  useUserPresence();
+  return <>{children}</>;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -41,34 +48,36 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <NotificationProvider>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />
-              
-              {/* Protected Routes */}
-              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-              <Route path="/produtos" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-              <Route path="/produtos/:id" element={<ProtectedRoute><ProductDetails /></ProtectedRoute>} />
-              <Route path="/categorias" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><Categories /></ProtectedRoute>} />
-              <Route path="/usuarios" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><Users /></ProtectedRoute>} />
-              <Route path="/inativos" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><InactiveUsers /></ProtectedRoute>} />
-              <Route path="/equipe" element={<ProtectedRoute><Team /></ProtectedRoute>} />
-              <Route path="/arquivos" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><FileManagement /></ProtectedRoute>} />
-              <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
-              <Route path="/notificacoes" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-              <Route path="/relatorios" element={<ProtectedRoute allowedRoles={['dev', 'admin', 'gerente']}><Reports /></ProtectedRoute>} />
-              <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-              <Route path="/ajuda" element={<ProtectedRoute><Help /></ProtectedRoute>} />
-              <Route path="/tickets" element={<ProtectedRoute><Tickets /></ProtectedRoute>} />
-              <Route path="/tickets/novo" element={<ProtectedRoute><NewTicket /></ProtectedRoute>} />
-              <Route path="/tickets/:id" element={<ProtectedRoute><TicketDetails /></ProtectedRoute>} />
-              <Route path="/ponto" element={<ProtectedRoute><TimeClock /></ProtectedRoute>} />
-              <Route path="/localizar" element={<ProtectedRoute allowedRoles={['dev']}><Localizar /></ProtectedRoute>} />
-              <Route path="/metas" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
-              <Route path="/atualizacoes" element={<ProtectedRoute><Updates /></ProtectedRoute>} />
-              
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+            <PresenceTracker>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/login" element={<Login />} />
+                
+                {/* Protected Routes */}
+                <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                <Route path="/produtos" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+                <Route path="/produtos/:id" element={<ProtectedRoute><ProductDetails /></ProtectedRoute>} />
+                <Route path="/categorias" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><Categories /></ProtectedRoute>} />
+                <Route path="/usuarios" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><Users /></ProtectedRoute>} />
+                <Route path="/inativos" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><InactiveUsers /></ProtectedRoute>} />
+                <Route path="/equipe" element={<ProtectedRoute><Team /></ProtectedRoute>} />
+                <Route path="/arquivos" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><FileManagement /></ProtectedRoute>} />
+                <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
+                <Route path="/notificacoes" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+                <Route path="/relatorios" element={<ProtectedRoute allowedRoles={['dev', 'admin', 'gerente']}><Reports /></ProtectedRoute>} />
+                <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                <Route path="/ajuda" element={<ProtectedRoute><Help /></ProtectedRoute>} />
+                <Route path="/tickets" element={<ProtectedRoute><Tickets /></ProtectedRoute>} />
+                <Route path="/tickets/novo" element={<ProtectedRoute><NewTicket /></ProtectedRoute>} />
+                <Route path="/tickets/:id" element={<ProtectedRoute><TicketDetails /></ProtectedRoute>} />
+                <Route path="/ponto" element={<ProtectedRoute><TimeClock /></ProtectedRoute>} />
+                <Route path="/localizar" element={<ProtectedRoute allowedRoles={['dev']}><Localizar /></ProtectedRoute>} />
+                <Route path="/metas" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
+                <Route path="/atualizacoes" element={<ProtectedRoute><Updates /></ProtectedRoute>} />
+                
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </PresenceTracker>
           </NotificationProvider>
         </AuthProvider>
       </BrowserRouter>
