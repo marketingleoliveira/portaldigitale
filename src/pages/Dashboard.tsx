@@ -21,6 +21,7 @@ import {
 import RoleBadge from '@/components/RoleBadge';
 import { Badge } from '@/components/ui/badge';
 import OnlineUsersCard from '@/components/OnlineUsersCard';
+import ActivityRankingCard from '@/components/ActivityRankingCard';
 
 interface DashboardStats {
   totalProducts: number;
@@ -240,7 +241,10 @@ const Dashboard: React.FC = () => {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {hasFullAccess(user?.role) && (
-            <OnlineUsersCard />
+            <>
+              <OnlineUsersCard />
+              <ActivityRankingCard />
+            </>
           )}
           {filteredStats.map((stat) => {
             const Icon = stat.icon;
