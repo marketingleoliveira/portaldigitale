@@ -14,6 +14,7 @@ import Products from "./pages/Products";
 import ProductDetails from "./pages/ProductDetails";
 import Categories from "./pages/Categories";
 import Users from "./pages/Users";
+import InactiveUsers from "./pages/InactiveUsers";
 import Downloads from "./pages/Downloads";
 import FileManagement from "./pages/FileManagement";
 import Notifications from "./pages/Notifications";
@@ -49,6 +50,7 @@ const App = () => (
               <Route path="/produtos/:id" element={<ProtectedRoute><ProductDetails /></ProtectedRoute>} />
               <Route path="/categorias" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><Categories /></ProtectedRoute>} />
               <Route path="/usuarios" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><Users /></ProtectedRoute>} />
+              <Route path="/inativos" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><InactiveUsers /></ProtectedRoute>} />
               <Route path="/equipe" element={<ProtectedRoute><Team /></ProtectedRoute>} />
               <Route path="/arquivos" element={<ProtectedRoute allowedRoles={['dev', 'admin']}><FileManagement /></ProtectedRoute>} />
               <Route path="/downloads" element={<ProtectedRoute><Downloads /></ProtectedRoute>} />
