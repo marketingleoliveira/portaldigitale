@@ -261,6 +261,54 @@ const Reports: React.FC = () => {
     }
   };
 
+  const downloadTimeRecordsCSV = async (userId: string, userName: string) => {
+    try {
+      // Fetch ALL time records for this user
+      const { data, error } = await supabase
+        .from('time_records')
+        .select('*')
+        .eq('user_id', userId)
+        .order('record_date', { ascending: true });
+
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        alert('Nenhum registro de ponto encontrado para este usuário.');
+        return;
+      }
+
+      // Create CSV content
+      const headers = ['Data', 'Entrada', 'Saída Almoço', 'Retorno Almoço', 'Saída'];
+      const rows = data.map(record => [
+        format(new Date(record.record_date + 'T00:00:00'), 'dd/MM/yyyy'),
+        record.entry_time ? format(new Date(record.entry_time), 'HH:mm') : '',
+        record.lunch_exit_time ? format(new Date(record.lunch_exit_time), 'HH:mm') : '',
+        record.lunch_return_time ? format(new Date(record.lunch_return_time), 'HH:mm') : '',
+        record.exit_time ? format(new Date(record.exit_time), 'HH:mm') : '',
+      ]);
+
+      const csvContent = [
+        headers.join(';'),
+        ...rows.map(row => row.join(';'))
+      ].join('\n');
+
+      // Add BOM for Excel compatibility with special characters
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ponto_${userName.replace(/\s+/g, '_').toLowerCase()}_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading time records:', error);
+      alert('Erro ao gerar arquivo de ponto.');
+    }
+  };
+
   const formatPunchTime = (time: string | null) => {
     if (!time) return '--:--';
     return format(new Date(time), 'HH:mm');
@@ -553,13 +601,28 @@ const Reports: React.FC = () => {
           {showTimeRecords && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Timer className="w-5 h-5 text-primary" />
-                  Registro de Ponto
-                </CardTitle>
-                <CardDescription>
-                  Últimos 30 dias de registros de ponto
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Timer className="w-5 h-5 text-primary" />
+                      Registro de Ponto
+                    </CardTitle>
+                    <CardDescription>
+                      Últimos 30 dias de registros de ponto
+                    </CardDescription>
+                  </div>
+                  {user?.role === 'dev' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => downloadTimeRecordsCSV(selectedUser.id, selectedUser.full_name)}
+                    >
+                      <Download className="w-4 h-4" />
+                      Exportar Histórico Completo
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 {loadingTimeRecords ? (
