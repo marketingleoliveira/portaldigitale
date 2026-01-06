@@ -13,23 +13,22 @@ interface GeoLocationData {
 
 const fetchGeoLocation = async (): Promise<GeoLocationData | null> => {
   try {
-    // Use ipapi.co with HTTPS (CORS friendly)
-    const response = await fetch('https://ipapi.co/json/', {
-      headers: { 'Accept': 'application/json' }
-    });
+    // Use edge function to avoid CORS issues
+    const { data, error } = await supabase.functions.invoke('get-geolocation');
     
-    if (!response.ok) throw new Error('API error');
+    if (error) {
+      console.error('Error from edge function:', error);
+      return null;
+    }
     
-    const data = await response.json();
-    
-    if (data.ip && data.latitude) {
+    if (data && data.ip && data.latitude) {
       return {
         ip: data.ip,
         latitude: data.latitude,
         longitude: data.longitude,
         city: data.city || 'Unknown',
         region: data.region || 'Unknown',
-        country: data.country_name || 'Unknown',
+        country: data.country || 'Unknown',
       };
     }
     
