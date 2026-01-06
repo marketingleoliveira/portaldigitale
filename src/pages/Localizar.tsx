@@ -368,129 +368,118 @@ const Localizar: React.FC = () => {
             </TabsContent>
             
             <TabsContent value="list">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...locations]
-              .sort((a, b) => {
-                const aOnline = checkOnlineStatus(a.user_id, a.last_updated);
-                const bOnline = checkOnlineStatus(b.user_id, b.last_updated);
-                if (aOnline && !bOnline) return -1;
-                if (!aOnline && bOnline) return 1;
-                return 0;
-              })
-              .map((location) => (
-              <Card key={location.user_id} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      {location.profile?.avatar_url ? (
-                        <img
-                          src={location.profile.avatar_url}
-                          alt={location.profile.full_name}
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <span className="text-primary font-medium">
-                            {location.profile?.full_name?.charAt(0) || '?'}
-                          </span>
-                        </div>
-                      )}
-                      <div>
-                        <CardTitle className="text-base">
-                          {location.profile?.full_name || 'Usuário desconhecido'}
-                        </CardTitle>
-                        <CardDescription className="text-xs">
-                          {location.profile?.email}
-                        </CardDescription>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1 items-end">
-                      <Badge 
-                        variant={checkOnlineStatus(location.user_id, location.last_updated) ? 'default' : 'secondary'}
-                        className={checkOnlineStatus(location.user_id, location.last_updated) ? 'bg-green-500' : ''}
-                      >
-                        {checkOnlineStatus(location.user_id, location.last_updated) ? (
-                          <><Wifi className="w-3 h-3 mr-1" /> Online</>
-                        ) : (
-                          <><WifiOff className="w-3 h-3 mr-1" /> Offline</>
-                        )}
-                      </Badge>
-                      {/* Location sharing status badge */}
-                      {location.profile?.location_sharing_enabled === true ? (
-                        <Badge variant="outline" className="text-xs gap-1 text-green-600 border-green-200 bg-green-50">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Auto
-                        </Badge>
-                      ) : location.profile?.location_sharing_enabled === false ? (
-                        <Badge variant="outline" className="text-xs gap-1 text-red-600 border-red-200 bg-red-50">
-                          <XCircle className="w-3 h-3" />
-                          Recusado
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
-                          <HelpCircle className="w-3 h-3" />
-                          Pendente
-                        </Badge>
-                      )}
-                    </div>
+              <Card>
+                <CardContent className="p-0">
+                  <div className="divide-y divide-border">
+                    {[...locations]
+                      .sort((a, b) => {
+                        const aOnline = checkOnlineStatus(a.user_id, a.last_updated);
+                        const bOnline = checkOnlineStatus(b.user_id, b.last_updated);
+                        if (aOnline && !bOnline) return -1;
+                        if (!aOnline && bOnline) return 1;
+                        return 0;
+                      })
+                      .map((location) => {
+                        const isOnline = checkOnlineStatus(location.user_id, location.last_updated);
+                        const isAwaiting = awaitingLocationIds.includes(location.user_id);
+                        
+                        return (
+                          <div 
+                            key={location.user_id} 
+                            className={`flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors ${!isOnline ? 'opacity-60' : ''}`}
+                          >
+                            {/* Avatar with online indicator */}
+                            <div className="relative flex-shrink-0">
+                              {location.profile?.avatar_url ? (
+                                <img
+                                  src={location.profile.avatar_url}
+                                  alt={location.profile.full_name}
+                                  className="w-12 h-12 rounded-full object-cover ring-2 ring-background"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center ring-2 ring-background">
+                                  <span className="text-primary font-semibold text-lg">
+                                    {location.profile?.full_name?.charAt(0) || '?'}
+                                  </span>
+                                </div>
+                              )}
+                              <span 
+                                className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-background ${
+                                  isOnline ? 'bg-green-500' : 'bg-muted-foreground'
+                                }`}
+                              />
+                            </div>
+
+                            {/* User info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="font-medium truncate">
+                                  {location.profile?.full_name || 'Usuário desconhecido'}
+                                </h3>
+                                {/* Sharing status badge */}
+                                {location.profile?.location_sharing_enabled === true ? (
+                                  <Badge variant="outline" className="text-xs gap-1 text-green-600 border-green-200 bg-green-50 flex-shrink-0">
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    Auto
+                                  </Badge>
+                                ) : location.profile?.location_sharing_enabled === false ? (
+                                  <Badge variant="outline" className="text-xs gap-1 text-red-600 border-red-200 bg-red-50 flex-shrink-0">
+                                    <XCircle className="w-3 h-3" />
+                                    Recusado
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs gap-1 text-muted-foreground flex-shrink-0">
+                                    <HelpCircle className="w-3 h-3" />
+                                    Pendente
+                                  </Badge>
+                                )}
+                              </div>
+                              
+                              {/* Location or status */}
+                              {location.city ? (
+                                <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                                  <span className="flex items-center gap-1">
+                                    <MapPin className="w-3.5 h-3.5" />
+                                    {location.city}, {location.region}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-3.5 h-3.5" />
+                                    {formatDistanceToNow(new Date(location.last_updated), { 
+                                      addSuffix: true, 
+                                      locale: ptBR 
+                                    })}
+                                  </span>
+                                </div>
+                              ) : isAwaiting ? (
+                                <div className="flex items-center gap-2 mt-1 text-sm text-primary">
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  Aguardando localização...
+                                </div>
+                              ) : (
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  Localização não disponível
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Actions */}
+                            {location.city && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="flex-shrink-0 gap-2"
+                                onClick={() => openGoogleMaps(location.latitude, location.longitude)}
+                              >
+                                <MapPin className="w-4 h-4" />
+                                <span className="hidden sm:inline">Ver no mapa</span>
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {location.city ? (
-                    <>
-                      <div className="flex items-center gap-2 text-sm">
-                        <MapPin className="w-4 h-4 text-muted-foreground" />
-                        <span>
-                          {location.city}, {location.region}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <Globe className="w-4 h-4 text-muted-foreground" />
-                        <span>{location.country}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="w-4 h-4" />
-                        <span>
-                          Atualizado {formatDistanceToNow(new Date(location.last_updated), { 
-                            addSuffix: true, 
-                            locale: ptBR 
-                          })}
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        IP: {location.ip_address}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full mt-2"
-                        onClick={() => openGoogleMaps(location.latitude, location.longitude)}
-                      >
-                        <MapPin className="w-4 h-4 mr-2" />
-                        Ver no Google Maps
-                      </Button>
-                    </>
-                  ) : (
-                    <div className="text-center py-4 text-muted-foreground">
-                      {awaitingLocationIds.includes(location.user_id) ? (
-                        <>
-                          <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-primary" />
-                          <p className="text-sm text-primary font-medium">Aguardando localização...</p>
-                          <p className="text-xs">Solicitação enviada ao vendedor</p>
-                        </>
-                      ) : (
-                        <>
-                          <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                          <p className="text-sm">Localização não disponível</p>
-                          <p className="text-xs">O usuário ainda não acessou o portal</p>
-                        </>
-                      )}
-                    </div>
-                  )}
                 </CardContent>
               </Card>
-            ))}
-          </div>
             </TabsContent>
             
             <TabsContent value="history">
