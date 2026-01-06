@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +39,19 @@ const Localizar: React.FC = () => {
   const [awaitingLocationIds, setAwaitingLocationIds] = useState<string[]>([]);
   const { toast } = useToast();
   const { isUserOnline, onlineCount } = useOnlineUsers();
+  
+  // Refs to access current values in realtime callback without causing re-subscription
+  const awaitingLocationIdsRef = useRef<string[]>([]);
+  const profilesRef = useRef<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    awaitingLocationIdsRef.current = awaitingLocationIds;
+  }, [awaitingLocationIds]);
+  
+  useEffect(() => {
+    profilesRef.current = profiles;
+  }, [profiles]);
 
   const fetchLocations = async () => {
     setLoading(true);
@@ -137,16 +150,16 @@ const Localizar: React.FC = () => {
           const newData = payload.new as { user_id?: string; city?: string; region?: string } | null;
           
           if (newData?.user_id) {
-            // Check if this user was in our awaiting list
-            const wasAwaiting = awaitingLocationIds.includes(newData.user_id);
+            // Check if this user was in our awaiting list using ref
+            const wasAwaiting = awaitingLocationIdsRef.current.includes(newData.user_id);
             
             // Remove user from awaiting list
             setAwaitingLocationIds(prev => prev.filter(id => id !== newData.user_id));
             
             // If user shared location after our request, show success toast
             if (wasAwaiting && newData.city) {
-              // Get user name from profiles
-              const profile = profiles.find(p => p.id === newData.user_id);
+              // Get user name from profiles using ref
+              const profile = profilesRef.current.find(p => p.id === newData.user_id);
               toast({
                 title: '📍 Localização recebida!',
                 description: `${profile?.full_name || 'Vendedor'} compartilhou sua localização: ${newData.city}, ${newData.region}`,
@@ -208,7 +221,7 @@ const Localizar: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [awaitingLocationIds, profiles]);
+  }, [toast]);
 
   const checkOnlineStatus = (userId: string, lastUpdated: string) => {
     // First check presence system
