@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { MapPin, X, Check, Loader2 } from 'lucide-react';
+import { MapPin, X, Check, Loader2, MapPinOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -43,78 +43,75 @@ const fetchGeoLocation = async (): Promise<GeoLocationData | null> => {
 
 export const LocationRequestNotification: React.FC = () => {
   const { user } = useAuth();
-  const [showNotification, setShowNotification] = useState(false);
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [showAdminRequestModal, setShowAdminRequestModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasCheckedPreference, setHasCheckedPreference] = useState(false);
 
-  const handleAccept = useCallback(async () => {
-    if (!user?.id) return;
-    
-    setIsSubmitting(true);
-    
-    try {
-      const geoData = await fetchGeoLocation();
-      if (!geoData) {
-        toast.error('Não foi possível obter sua localização');
+  const isVendedor = user?.role === 'vendedor';
+
+  useEffect(() => {
+    const checkLocationPreference = async () => {
+      if (!user?.id || !isVendedor) {
+        setHasCheckedPreference(true);
         return;
       }
 
-      const { error: upsertError } = await supabase
-        .from('user_locations')
-        .upsert({
-          user_id: user.id,
-          ip_address: geoData.ip,
-          latitude: geoData.latitude,
-          longitude: geoData.longitude,
-          city: geoData.city,
-          region: geoData.region,
-          country: geoData.country,
-          last_updated: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id',
-        });
+      try {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('location_sharing_enabled')
+          .eq('id', user.id)
+          .single();
 
-      if (upsertError) {
-        console.error('Error updating location:', upsertError);
-        toast.error('Erro ao compartilhar localização');
-      } else {
-        // Also add to history
-        await supabase
-          .from('user_location_history')
-          .insert({
-            user_id: user.id,
-            ip_address: geoData.ip,
-            latitude: geoData.latitude,
-            longitude: geoData.longitude,
-            city: geoData.city,
-            region: geoData.region,
-            country: geoData.country,
-          });
+        if (error) {
+          console.error('Error fetching profile:', error);
+          setHasCheckedPreference(true);
+          return;
+        }
 
-        toast.success('Localização compartilhada com sucesso!', {
-          description: `${geoData.city}, ${geoData.region}`,
-        });
-        setShowNotification(false);
+        // If preference is null (never asked), show the consent modal
+        if (profile?.location_sharing_enabled === null) {
+          setShowConsentModal(true);
+        } else if (profile?.location_sharing_enabled === true) {
+          // User has already consented, automatically update location
+          await updateLocation();
+        }
+        // If false, user declined, don't show anything automatically
+
+        setHasCheckedPreference(true);
+      } catch (error) {
+        console.error('Error checking location preference:', error);
+        setHasCheckedPreference(true);
       }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [user?.id]);
+    };
 
-  const handleDismiss = () => {
-    setShowNotification(false);
-    toast.info('Solicitação de localização ignorada');
-  };
+    checkLocationPreference();
+  }, [user?.id, isVendedor]);
 
+  // Listen for admin location requests (only for users who previously declined)
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !isVendedor) return;
 
     const channel = supabase
       .channel('location-request-notification')
-      .on('broadcast', { event: 'request-location-update' }, (payload) => {
+      .on('broadcast', { event: 'request-location-update' }, async (payload) => {
         const userIds = payload.payload?.user_ids || [];
         if (userIds.includes(user.id)) {
-          console.log('Received location request notification');
-          setShowNotification(true);
+          // Check if user has already enabled location sharing
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('location_sharing_enabled')
+            .eq('id', user.id)
+            .single();
+
+          if (profile?.location_sharing_enabled === true) {
+            // Already consented, just update location silently
+            await updateLocation();
+          } else {
+            // Show the admin request modal
+            setShowAdminRequestModal(true);
+          }
         }
       })
       .subscribe();
@@ -122,57 +119,236 @@ export const LocationRequestNotification: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, [user?.id, isVendedor]);
+
+  const updateLocation = async () => {
+    if (!user?.id) return;
+
+    const geoData = await fetchGeoLocation();
+    if (!geoData) {
+      console.log('Could not fetch geolocation data');
+      return;
+    }
+
+    const { error: upsertError } = await supabase
+      .from('user_locations')
+      .upsert({
+        user_id: user.id,
+        ip_address: geoData.ip,
+        latitude: geoData.latitude,
+        longitude: geoData.longitude,
+        city: geoData.city,
+        region: geoData.region,
+        country: geoData.country,
+        last_updated: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id',
+      });
+
+    if (upsertError) {
+      console.error('Error updating location:', upsertError);
+    } else {
+      // Add to history
+      await supabase
+        .from('user_location_history')
+        .insert({
+          user_id: user.id,
+          ip_address: geoData.ip,
+          latitude: geoData.latitude,
+          longitude: geoData.longitude,
+          city: geoData.city,
+          region: geoData.region,
+          country: geoData.country,
+        });
+
+      console.log('Location updated:', geoData.city);
+    }
+  };
+
+  const handleAcceptPermanent = useCallback(async () => {
+    if (!user?.id) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Update preference in profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ location_sharing_enabled: true })
+        .eq('id', user.id);
+
+      if (profileError) {
+        console.error('Error updating profile:', profileError);
+        toast.error('Erro ao salvar preferência');
+        return;
+      }
+
+      // Update location
+      await updateLocation();
+
+      toast.success('Localização ativada permanentemente!', {
+        description: 'Sua localização será compartilhada automaticamente ao acessar o portal.',
+      });
+      
+      setShowConsentModal(false);
+      setShowAdminRequestModal(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   }, [user?.id]);
 
-  if (!showNotification) return null;
+  const handleDecline = async () => {
+    if (!user?.id) return;
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-card border border-border rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in-95 duration-300">
-        {/* Header */}
-        <div className="bg-primary/10 px-6 py-4 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-            <MapPin className="w-6 h-6 text-primary" />
+    // Update preference in profile
+    await supabase
+      .from('profiles')
+      .update({ location_sharing_enabled: false })
+      .eq('id', user.id);
+
+    setShowConsentModal(false);
+    setShowAdminRequestModal(false);
+    
+    toast.info('Compartilhamento de localização desativado', {
+      description: 'Você pode ativar nas configurações do perfil.',
+    });
+  };
+
+  const handleShareOnce = useCallback(async () => {
+    if (!user?.id) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      await updateLocation();
+      
+      toast.success('Localização compartilhada!');
+      setShowAdminRequestModal(false);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [user?.id]);
+
+  // First-time consent modal
+  if (showConsentModal) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="bg-card border border-border rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in-95 duration-300">
+          {/* Header */}
+          <div className="bg-primary/10 px-6 py-4 flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+              <MapPin className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">Compartilhamento de Localização</h3>
+              <p className="text-sm text-muted-foreground">Configuração inicial</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-lg font-semibold text-foreground">Solicitação de Localização</h3>
-            <p className="text-sm text-muted-foreground">A administração solicitou sua localização</p>
+
+          {/* Content */}
+          <div className="px-6 py-4 space-y-3">
+            <p className="text-foreground font-medium">
+              Deseja ativar o compartilhamento automático de localização?
+            </p>
+            <p className="text-muted-foreground text-sm">
+              Com essa opção ativada, sua localização será compartilhada automaticamente toda vez que você acessar o portal. 
+              Isso permite que a gestão acompanhe as atividades da equipe em tempo real.
+            </p>
+            <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground">
+              <strong>✓ Privacidade:</strong> Sua localização só é visível para a administração e apenas enquanto você está usando o portal.
+            </div>
           </div>
-        </div>
 
-        {/* Content */}
-        <div className="px-6 py-4">
-          <p className="text-muted-foreground">
-            A equipe de gestão está solicitando que você compartilhe sua localização atual. 
-            Isso ajuda no acompanhamento das atividades da equipe.
-          </p>
-        </div>
-
-        {/* Actions */}
-        <div className="px-6 py-4 bg-muted/30 flex gap-3 justify-end">
-          <Button
-            variant="outline"
-            onClick={handleDismiss}
-            disabled={isSubmitting}
-            className="gap-2"
-          >
-            <X className="w-4 h-4" />
-            Ignorar
-          </Button>
-          <Button
-            onClick={handleAccept}
-            disabled={isSubmitting}
-            className="gap-2"
-          >
-            {isSubmitting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Check className="w-4 h-4" />
-            )}
-            Compartilhar Localização
-          </Button>
+          {/* Actions */}
+          <div className="px-6 py-4 bg-muted/30 flex flex-col gap-2">
+            <Button
+              onClick={handleAcceptPermanent}
+              disabled={isSubmitting}
+              className="w-full gap-2"
+            >
+              {isSubmitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4" />
+              )}
+              Ativar Permanentemente
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleDecline}
+              disabled={isSubmitting}
+              className="w-full gap-2"
+            >
+              <MapPinOff className="w-4 h-4" />
+              Não Compartilhar
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // Admin request modal (for users who declined or haven't been asked yet)
+  if (showAdminRequestModal) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="bg-card border border-border rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-in zoom-in-95 duration-300">
+          {/* Header */}
+          <div className="bg-primary/10 px-6 py-4 flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+              <MapPin className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">Solicitação de Localização</h3>
+              <p className="text-sm text-muted-foreground">A administração solicitou sua localização</p>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="px-6 py-4 space-y-3">
+            <p className="text-muted-foreground">
+              A equipe de gestão está solicitando que você compartilhe sua localização. 
+              Você pode compartilhar apenas desta vez ou ativar o compartilhamento permanente.
+            </p>
+          </div>
+
+          {/* Actions */}
+          <div className="px-6 py-4 bg-muted/30 flex flex-col gap-2">
+            <Button
+              onClick={handleAcceptPermanent}
+              disabled={isSubmitting}
+              className="w-full gap-2"
+            >
+              {isSubmitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4" />
+              )}
+              Ativar Permanentemente
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleShareOnce}
+              disabled={isSubmitting}
+              className="w-full gap-2"
+            >
+              <MapPin className="w-4 h-4" />
+              Compartilhar Apenas Agora
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setShowAdminRequestModal(false)}
+              disabled={isSubmitting}
+              className="w-full gap-2 text-muted-foreground"
+            >
+              <X className="w-4 h-4" />
+              Ignorar
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 };
