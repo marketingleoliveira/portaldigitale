@@ -103,6 +103,11 @@ const Localizar: React.FC = () => {
       // Combine and sort: online users first, then by last update
       const allLocations = [...locationsWithProfiles, ...vendedoresWithoutLocation];
       setLocations(allLocations);
+      
+      toast({
+        title: 'Localizações atualizadas',
+        description: `${allLocations.filter(l => l.latitude != null).length} vendedores com localização encontrados.`,
+      });
     } catch (error) {
       console.error('Error fetching locations:', error);
       toast({
