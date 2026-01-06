@@ -9,6 +9,8 @@ interface GeoLocationData {
   city: string;
   region: string;
   country: string;
+  neighborhood: string;
+  street: string;
   source: 'gps' | 'ip';
 }
 
@@ -32,17 +34,19 @@ const getBrowserGeolocation = (): Promise<GeolocationPosition> => {
   });
 };
 
-// Reverse geocoding to get city/region from coordinates
-const reverseGeocode = async (lat: number, lng: number): Promise<{ city: string; region: string; country: string }> => {
+// Reverse geocoding to get city/region/neighborhood/street from coordinates
+const reverseGeocode = async (lat: number, lng: number): Promise<{ city: string; region: string; country: string; neighborhood: string; street: string }> => {
   try {
     const { data: tokenData } = await supabase.functions.invoke('get-mapbox-token');
     if (tokenData?.token) {
       const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${tokenData.token}&types=place,region,country&language=pt`
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${tokenData.token}&types=address,neighborhood,locality,place,region,country&language=pt`
       );
       if (response.ok) {
         const data = await response.json();
         const features = data.features || [];
+        const address = features.find((f: any) => f.place_type?.includes('address'));
+        const neighborhood = features.find((f: any) => f.place_type?.includes('neighborhood') || f.place_type?.includes('locality'));
         const place = features.find((f: any) => f.place_type?.includes('place'));
         const region = features.find((f: any) => f.place_type?.includes('region'));
         const country = features.find((f: any) => f.place_type?.includes('country'));
@@ -51,13 +55,15 @@ const reverseGeocode = async (lat: number, lng: number): Promise<{ city: string;
           city: place?.text || 'Unknown',
           region: region?.text || 'Unknown',
           country: country?.text || 'Brazil',
+          neighborhood: neighborhood?.text || '',
+          street: address?.text || '',
         };
       }
     }
   } catch (error) {
     console.error('Reverse geocoding failed:', error);
   }
-  return { city: 'Unknown', region: 'Unknown', country: 'Unknown' };
+  return { city: 'Unknown', region: 'Unknown', country: 'Unknown', neighborhood: '', street: '' };
 };
 
 const fetchGeoLocation = async (): Promise<GeoLocationData | null> => {
@@ -82,6 +88,8 @@ const fetchGeoLocation = async (): Promise<GeoLocationData | null> => {
         city: locationInfo.city,
         region: locationInfo.region,
         country: locationInfo.country,
+        neighborhood: locationInfo.neighborhood,
+        street: locationInfo.street,
         source: 'gps' as const,
       };
     } catch (gpsError) {
@@ -104,6 +112,8 @@ const fetchGeoLocation = async (): Promise<GeoLocationData | null> => {
         city: data.city || 'Unknown',
         region: data.region || 'Unknown',
         country: data.country || 'Unknown',
+        neighborhood: data.neighborhood || '',
+        street: data.street || '',
         source: 'ip' as const,
       };
     }
@@ -147,6 +157,8 @@ export const useLocationTracking = () => {
           city: geoData.city,
           region: geoData.region,
           country: geoData.country,
+          neighborhood: geoData.neighborhood,
+          street: geoData.street,
           location_source: geoData.source,
           last_updated: new Date().toISOString(),
         }, {
@@ -171,6 +183,8 @@ export const useLocationTracking = () => {
             city: geoData.city,
             region: geoData.region,
             country: geoData.country,
+            neighborhood: geoData.neighborhood,
+            street: geoData.street,
             location_source: geoData.source,
           });
 

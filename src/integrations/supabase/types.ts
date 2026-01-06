@@ -746,8 +746,10 @@ export type Database = {
           latitude: number | null
           location_source: string | null
           longitude: number | null
+          neighborhood: string | null
           recorded_at: string
           region: string | null
+          street: string | null
           user_id: string
         }
         Insert: {
@@ -758,8 +760,10 @@ export type Database = {
           latitude?: number | null
           location_source?: string | null
           longitude?: number | null
+          neighborhood?: string | null
           recorded_at?: string
           region?: string | null
+          street?: string | null
           user_id: string
         }
         Update: {
@@ -770,8 +774,10 @@ export type Database = {
           latitude?: number | null
           location_source?: string | null
           longitude?: number | null
+          neighborhood?: string | null
           recorded_at?: string
           region?: string | null
+          street?: string | null
           user_id?: string
         }
         Relationships: []
@@ -787,7 +793,9 @@ export type Database = {
           latitude: number | null
           location_source: string | null
           longitude: number | null
+          neighborhood: string | null
           region: string | null
+          street: string | null
           user_id: string
         }
         Insert: {
@@ -800,7 +808,9 @@ export type Database = {
           latitude?: number | null
           location_source?: string | null
           longitude?: number | null
+          neighborhood?: string | null
           region?: string | null
+          street?: string | null
           user_id: string
         }
         Update: {
@@ -813,7 +823,9 @@ export type Database = {
           latitude?: number | null
           location_source?: string | null
           longitude?: number | null
+          neighborhood?: string | null
           region?: string | null
+          street?: string | null
           user_id?: string
         }
         Relationships: []
