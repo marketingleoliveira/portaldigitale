@@ -53,15 +53,24 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const { isUserOnline, onlineCount } = useOnlineUsers();
-  const tickRef = useRef<number>(0);
-  const [tick, setTick] = useState(0);
+  const sessionsRef = useRef<Session[]>([]);
+  const profilesRef = useRef<UserProfile[]>([]);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
+
+  useEffect(() => {
+    profilesRef.current = profiles;
+  }, [profiles]);
 
   // Fetch initial data
   useEffect(() => {
     fetchInitialData();
   }, []);
 
-  // Real-time subscription for session changes (only INSERT and DELETE, not UPDATE)
+  // Real-time subscription for session changes (only INSERT and DELETE)
   useEffect(() => {
     const channel = supabase
       .channel('activity-sessions-realtime')
@@ -94,21 +103,16 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
     };
   }, []);
 
-  // Tick every second to recalculate active session durations
+  // Single interval to recalculate every second
   useEffect(() => {
     const interval = setInterval(() => {
-      tickRef.current += 1;
-      setTick(tickRef.current);
+      if (profilesRef.current.length > 0) {
+        calculateActivities(sessionsRef.current, profilesRef.current);
+      }
     }, 1000);
     return () => clearInterval(interval);
   }, []);
-
-  // Recalculate activities when sessions, profiles, or tick changes
-  useEffect(() => {
-    if (profiles.length > 0) {
-      calculateActivities();
-    }
-  }, [sessions, profiles, tick]);
+  
 
   const getDateRanges = () => {
     const now = new Date();
@@ -163,7 +167,7 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
     }
   };
 
-  const calculateActivities = () => {
+  const calculateActivities = (sessionsData: Session[], profilesData: UserProfile[]) => {
     const ranges = getDateRanges();
     const { day: dayRange, week: weekRange, month: monthRange } = ranges;
     const now = Date.now();
@@ -171,7 +175,7 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
     // Aggregate by user for each period
     const userActivityMap = new Map<string, { day: PeriodActivity; week: PeriodActivity; month: PeriodActivity }>();
 
-    sessions.forEach(session => {
+    sessionsData.forEach(session => {
       const sessionStart = new Date(session.session_start).getTime();
       
       // Calculate duration - for active sessions, calculate from session_start to now
@@ -212,7 +216,7 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
     });
 
     // Build activity data with profiles
-    const activityData: ActivityData[] = profiles.map(profile => {
+    const activityData: ActivityData[] = profilesData.map(profile => {
       const activity = userActivityMap.get(profile.id);
       return {
         user_id: profile.id,
