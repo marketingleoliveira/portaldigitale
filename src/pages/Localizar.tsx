@@ -36,6 +36,7 @@ const Localizar: React.FC = () => {
   const [profiles, setProfiles] = useState<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [requestingLocation, setRequestingLocation] = useState(false);
+  const [awaitingLocationIds, setAwaitingLocationIds] = useState<string[]>([]);
   const { toast } = useToast();
   const { isUserOnline, onlineCount } = useOnlineUsers();
 
@@ -126,7 +127,12 @@ const Localizar: React.FC = () => {
           schema: 'public',
           table: 'user_locations',
         },
-        () => {
+        (payload) => {
+          // Remove user from awaiting list when location is updated
+          const newData = payload.new as { user_id?: string } | null;
+          if (newData?.user_id) {
+            setAwaitingLocationIds(prev => prev.filter(id => id !== newData.user_id));
+          }
           fetchLocations();
         }
       )
@@ -164,6 +170,11 @@ const Localizar: React.FC = () => {
         title: 'Solicitação enviada',
         description: `Solicitação de localização enviada para ${data?.usersWithoutLocation || 0} vendedores online sem localização.`,
       });
+      
+      // Store IDs of users awaiting location update
+      if (data?.userIds) {
+        setAwaitingLocationIds(data.userIds);
+      }
       
       // Refresh locations after a short delay
       setTimeout(fetchLocations, 3000);
@@ -353,9 +364,19 @@ const Localizar: React.FC = () => {
                     </>
                   ) : (
                     <div className="text-center py-4 text-muted-foreground">
-                      <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">Localização não disponível</p>
-                      <p className="text-xs">O usuário ainda não acessou o portal</p>
+                      {awaitingLocationIds.includes(location.user_id) ? (
+                        <>
+                          <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-primary" />
+                          <p className="text-sm text-primary font-medium">Aguardando localização...</p>
+                          <p className="text-xs">Solicitação enviada ao vendedor</p>
+                        </>
+                      ) : (
+                        <>
+                          <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">Localização não disponível</p>
+                          <p className="text-xs">O usuário ainda não acessou o portal</p>
+                        </>
+                      )}
                     </div>
                   )}
                 </CardContent>
