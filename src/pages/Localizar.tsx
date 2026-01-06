@@ -41,6 +41,7 @@ const Localizar: React.FC = () => {
   const { isUserOnline, onlineCount } = useOnlineUsers();
 
   const fetchLocations = async () => {
+    setLoading(true);
     try {
       // First get all vendedores
       const { data: vendedores, error: vendedoresError } = await supabase
