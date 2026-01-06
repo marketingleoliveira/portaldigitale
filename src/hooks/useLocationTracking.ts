@@ -186,8 +186,8 @@ export const useLocationTracking = () => {
     // Update location immediately
     updateLocation();
 
-    // Update location every 5 minutes
-    const interval = setInterval(() => updateLocation(), 5 * 60 * 1000);
+    // Update location every 1 minute
+    const interval = setInterval(() => updateLocation(), 1 * 60 * 1000);
 
     // Listen for forced location update requests
     const channel = supabase
