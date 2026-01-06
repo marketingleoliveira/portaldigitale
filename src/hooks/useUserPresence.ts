@@ -74,8 +74,31 @@ export const useUserPresence = () => {
 
   const startSession = useCallback(async () => {
     if (!user?.id) return;
+    
+    // If we already have a session, don't create a new one
+    if (sessionIdRef.current && sessionStartRef.current) return;
 
     try {
+      // First check if there's an active session for this user
+      const { data: existingSession } = await supabase
+        .from('user_activity_sessions')
+        .select('id, session_start')
+        .eq('user_id', user.id)
+        .is('session_end', null)
+        .order('session_start', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingSession) {
+        // Resume existing session
+        sessionIdRef.current = existingSession.id;
+        sessionStartRef.current = new Date(existingSession.session_start);
+        lastActivityRef.current = Date.now();
+        await updatePresence(true);
+        return;
+      }
+
+      // Create new session
       const now = new Date();
       
       const { data, error } = await supabase
