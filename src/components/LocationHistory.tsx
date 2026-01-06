@@ -4,9 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MapPin, Clock, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { MapPin, Clock, Loader2, ChevronLeft, ChevronRight, Route, List } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import LocationHistoryMap from './LocationHistoryMap';
 
 interface LocationHistoryEntry {
   id: string;
@@ -32,11 +34,12 @@ interface LocationHistoryProps {
 }
 
 const LocationHistory: React.FC<LocationHistoryProps> = ({ vendedorIds, profiles }) => {
-  const [selectedUser, setSelectedUser] = useState<string>('all');
+  const [selectedUser, setSelectedUser] = useState<string>(profiles[0]?.id || 'all');
   const [history, setHistory] = useState<LocationHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [viewMode, setViewMode] = useState<'route' | 'list'>('route');
   const pageSize = 20;
 
   const fetchHistory = async (userId: string, pageNum: number) => {
@@ -83,6 +86,11 @@ const LocationHistory: React.FC<LocationHistoryProps> = ({ vendedorIds, profiles
     }
   };
 
+  const getSelectedUserName = () => {
+    if (selectedUser === 'all') return 'Todos';
+    return profiles.find(p => p.id === selectedUser)?.full_name || 'Desconhecido';
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -95,20 +103,48 @@ const LocationHistory: React.FC<LocationHistoryProps> = ({ vendedorIds, profiles
           </div>
           <Select value={selectedUser} onValueChange={(v) => { setSelectedUser(v); setPage(0); }}>
             <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filtrar por vendedor" />
+              <SelectValue placeholder="Selecionar vendedor" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos os vendedores</SelectItem>
               {profiles.map(profile => (
                 <SelectItem key={profile.id} value={profile.id}>
                   {profile.full_name}
                 </SelectItem>
               ))}
+              <SelectItem value="all">Todos os vendedores</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </CardHeader>
       <CardContent>
+        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'route' | 'list')} className="w-full">
+          <TabsList className="mb-4">
+            <TabsTrigger value="route" className="flex items-center gap-2">
+              <Route className="w-4 h-4" />
+              Trajeto
+            </TabsTrigger>
+            <TabsTrigger value="list" className="flex items-center gap-2">
+              <List className="w-4 h-4" />
+              Lista
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="route">
+            {selectedUser === 'all' ? (
+              <div className="text-center py-8 text-muted-foreground border rounded-lg">
+                <Route className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p>Selecione um vendedor para ver o trajeto</p>
+                <p className="text-xs mt-1">O mapa de trajeto mostra o histórico de movimentação individual</p>
+              </div>
+            ) : (
+              <LocationHistoryMap 
+                userId={selectedUser} 
+                userName={getSelectedUserName()} 
+              />
+            )}
+          </TabsContent>
+          
+          <TabsContent value="list">
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -204,6 +240,8 @@ const LocationHistory: React.FC<LocationHistoryProps> = ({ vendedorIds, profiles
             </div>
           </>
         )}
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );
