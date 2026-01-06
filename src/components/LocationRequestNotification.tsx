@@ -14,8 +14,83 @@ interface GeoLocationData {
   country: string;
 }
 
+// Get precise location using browser's Geolocation API (GPS)
+const getBrowserGeolocation = (): Promise<GeolocationPosition> => {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation not supported'));
+      return;
+    }
+    
+    navigator.geolocation.getCurrentPosition(
+      resolve,
+      reject,
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  });
+};
+
+// Reverse geocoding to get city/region from coordinates
+const reverseGeocode = async (lat: number, lng: number): Promise<{ city: string; region: string; country: string }> => {
+  try {
+    // Use the Mapbox token to do reverse geocoding
+    const { data: tokenData } = await supabase.functions.invoke('get-mapbox-token');
+    if (tokenData?.token) {
+      const response = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${tokenData.token}&types=place,region,country&language=pt`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        const features = data.features || [];
+        const place = features.find((f: any) => f.place_type?.includes('place'));
+        const region = features.find((f: any) => f.place_type?.includes('region'));
+        const country = features.find((f: any) => f.place_type?.includes('country'));
+        
+        return {
+          city: place?.text || 'Unknown',
+          region: region?.text || 'Unknown',
+          country: country?.text || 'Brazil',
+        };
+      }
+    }
+  } catch (error) {
+    console.error('Reverse geocoding failed:', error);
+  }
+  return { city: 'Unknown', region: 'Unknown', country: 'Unknown' };
+};
+
 const fetchGeoLocation = async (): Promise<GeoLocationData | null> => {
   try {
+    // First, try to get precise location from browser GPS
+    try {
+      const position = await getBrowserGeolocation();
+      const { latitude, longitude } = position.coords;
+      
+      // Get city/region from coordinates
+      const locationInfo = await reverseGeocode(latitude, longitude);
+      
+      // Get IP address from edge function
+      const { data: ipData } = await supabase.functions.invoke('get-geolocation');
+      
+      console.log('GPS location obtained:', { latitude, longitude, ...locationInfo });
+      
+      return {
+        ip: ipData?.ip || 'Unknown',
+        latitude,
+        longitude,
+        city: locationInfo.city,
+        region: locationInfo.region,
+        country: locationInfo.country,
+      };
+    } catch (gpsError) {
+      console.log('GPS failed, falling back to IP geolocation:', gpsError);
+    }
+    
+    // Fallback to IP-based geolocation
     const { data, error } = await supabase.functions.invoke('get-geolocation');
     
     if (error) {
