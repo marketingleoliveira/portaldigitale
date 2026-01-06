@@ -83,6 +83,7 @@ const FileManagement: React.FC = () => {
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -786,11 +787,19 @@ const FileManagement: React.FC = () => {
     return file.category || '-';
   };
 
-  const filteredFiles = files.filter(file =>
-    file.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    file.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    file.subcategory?.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredFiles = files.filter(file => {
+    const matchesSearch = 
+      file.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      file.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      file.subcategory?.name.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesCategory = 
+      filterCategory === 'all' ||
+      (filterCategory === 'uncategorized' && !file.category) ||
+      file.category === filterCategory;
+    
+    return matchesSearch && matchesCategory;
+  });
 
   const filteredSubcategories = getSubcategoriesForCategory(formData.category_id);
   const editFilteredSubcategories = getSubcategoriesForCategory(editFormData.category_id);
@@ -1305,17 +1314,33 @@ const FileManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* Search */}
+        {/* Search and Filter */}
         <Card>
           <CardContent className="pt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar arquivos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar arquivos..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue placeholder="Filtrar por categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as categorias</SelectItem>
+                  <SelectItem value="uncategorized">Sem categoria</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.name}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
