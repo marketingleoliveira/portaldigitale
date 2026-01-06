@@ -19,9 +19,10 @@ interface UserLocation {
 
 interface LocationMapProps {
   locations: UserLocation[];
+  isUserOnline?: (userId: string) => boolean;
 }
 
-const LocationMap: React.FC<LocationMapProps> = ({ locations }) => {
+const LocationMap: React.FC<LocationMapProps> = ({ locations, isUserOnline }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
@@ -111,6 +112,9 @@ const LocationMap: React.FC<LocationMapProps> = ({ locations }) => {
     validLocations.forEach(location => {
       if (location.latitude == null || location.longitude == null) return;
 
+      // Check if user is online
+      const online = isUserOnline ? isUserOnline(location.user_id) : false;
+
       // Create custom marker element
       const el = document.createElement('div');
       el.className = 'custom-marker';
@@ -118,7 +122,9 @@ const LocationMap: React.FC<LocationMapProps> = ({ locations }) => {
         <div style="
           width: 40px;
           height: 40px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: ${online 
+            ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' 
+            : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'};
           border-radius: 50%;
           border: 3px solid white;
           box-shadow: 0 2px 10px rgba(0,0,0,0.3);
@@ -127,11 +133,22 @@ const LocationMap: React.FC<LocationMapProps> = ({ locations }) => {
           justify-content: center;
           cursor: pointer;
           transition: transform 0.2s;
+          position: relative;
         ">
           ${location.profile?.avatar_url 
             ? `<img src="${location.profile.avatar_url}" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover;" />`
             : `<span style="color: white; font-weight: bold; font-size: 14px;">${location.profile?.full_name?.charAt(0) || '?'}</span>`
           }
+          ${online ? `<span style="
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            width: 12px;
+            height: 12px;
+            background: #22c55e;
+            border: 2px solid white;
+            border-radius: 50%;
+          "></span>` : ''}
         </div>
       `;
 
@@ -145,7 +162,13 @@ const LocationMap: React.FC<LocationMapProps> = ({ locations }) => {
       // Create popup
       const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
         <div style="padding: 8px; min-width: 150px;">
-          <strong style="font-size: 14px;">${location.profile?.full_name || 'Desconhecido'}</strong>
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <strong style="font-size: 14px;">${location.profile?.full_name || 'Desconhecido'}</strong>
+            ${online 
+              ? '<span style="background: #22c55e; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px;">Online</span>'
+              : '<span style="background: #9ca3af; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px;">Offline</span>'
+            }
+          </div>
           <p style="margin: 4px 0 0 0; font-size: 12px; color: #666;">
             📍 ${location.city || 'Cidade desconhecida'}${location.region ? `, ${location.region}` : ''}
           </p>

@@ -97,7 +97,9 @@ const Localizar: React.FC = () => {
           profile: profilesData?.find(p => p.id === id),
         }));
 
-      setLocations([...locationsWithProfiles, ...vendedoresWithoutLocation]);
+      // Combine and sort: online users first, then by last update
+      const allLocations = [...locationsWithProfiles, ...vendedoresWithoutLocation];
+      setLocations(allLocations);
     } catch (error) {
       console.error('Error fetching locations:', error);
       toast({
@@ -206,18 +208,34 @@ const Localizar: React.FC = () => {
                 <CardHeader>
                   <CardTitle className="text-lg">Mapa de Localizações</CardTitle>
                   <CardDescription>
-                    {locations.filter(l => l.latitude != null).length} vendedores com localização disponível
+                    {locations.filter(l => l.latitude != null).length} vendedores no mapa
+                    {(() => {
+                      const onlineWithoutLocation = locations.filter(l => 
+                        checkOnlineStatus(l.user_id, l.last_updated) && l.latitude == null
+                      ).length;
+                      return onlineWithoutLocation > 0 
+                        ? ` • ${onlineWithoutLocation} online sem localização` 
+                        : '';
+                    })()}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <LocationMap locations={locations} />
+                  <LocationMap locations={locations} isUserOnline={isUserOnline} />
                 </CardContent>
               </Card>
             </TabsContent>
             
             <TabsContent value="list">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {locations.map((location) => (
+            {[...locations]
+              .sort((a, b) => {
+                const aOnline = checkOnlineStatus(a.user_id, a.last_updated);
+                const bOnline = checkOnlineStatus(b.user_id, b.last_updated);
+                if (aOnline && !bOnline) return -1;
+                if (!aOnline && bOnline) return 1;
+                return 0;
+              })
+              .map((location) => (
               <Card key={location.user_id} className="hover:shadow-md transition-shadow">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
