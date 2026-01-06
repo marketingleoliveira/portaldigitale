@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useUserPresence } from "@/hooks/useUserPresence";
+import { useLocationTracking } from "@/hooks/useLocationTracking";
 
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -34,9 +35,10 @@ import Localizar from "./pages/Localizar";
 
 const queryClient = new QueryClient();
 
-// Component to track user presence
+// Component to track user presence and location
 const PresenceTracker = ({ children }: { children: React.ReactNode }) => {
   useUserPresence();
+  useLocationTracking();
   return <>{children}</>;
 };
 
