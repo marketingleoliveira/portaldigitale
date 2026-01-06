@@ -4,12 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { MapPin, Clock, Globe, Loader2, RefreshCw, Wifi, WifiOff, Map, List } from 'lucide-react';
+import { MapPin, Clock, Globe, Loader2, RefreshCw, Wifi, WifiOff, Map, List, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import LocationMap from '@/components/LocationMap';
+import LocationHistory from '@/components/LocationHistory';
 
 interface UserLocation {
   id: string;
@@ -30,6 +31,8 @@ interface UserLocation {
 
 const Localizar: React.FC = () => {
   const [locations, setLocations] = useState<UserLocation[]>([]);
+  const [vendedorIds, setVendedorIds] = useState<string[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -43,9 +46,10 @@ const Localizar: React.FC = () => {
 
       if (vendedoresError) throw vendedoresError;
 
-      const vendedorIds = vendedores?.map(v => v.user_id) || [];
+      const vendedorIdsList = vendedores?.map(v => v.user_id) || [];
+      setVendedorIds(vendedorIdsList);
 
-      if (vendedorIds.length === 0) {
+      if (vendedorIdsList.length === 0) {
         setLocations([]);
         setLoading(false);
         return;
@@ -55,26 +59,28 @@ const Localizar: React.FC = () => {
       const { data: locationsData, error: locationsError } = await supabase
         .from('user_locations')
         .select('*')
-        .in('user_id', vendedorIds);
+        .in('user_id', vendedorIdsList);
 
       if (locationsError) throw locationsError;
 
       // Get profiles for these users
-      const { data: profiles, error: profilesError } = await supabase
+      const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('id, full_name, email, avatar_url')
-        .in('id', vendedorIds);
+        .in('id', vendedorIdsList);
 
       if (profilesError) throw profilesError;
+      
+      setProfiles(profilesData || []);
 
       // Combine locations with profiles
       const locationsWithProfiles = (locationsData || []).map(loc => ({
         ...loc,
-        profile: profiles?.find(p => p.id === loc.user_id),
+        profile: profilesData?.find(p => p.id === loc.user_id),
       }));
 
       // Add vendedores without location data
-      const vendedoresWithoutLocation = vendedorIds
+      const vendedoresWithoutLocation = vendedorIdsList
         .filter(id => !locationsData?.find(loc => loc.user_id === id))
         .map(id => ({
           id: id,
@@ -86,7 +92,7 @@ const Localizar: React.FC = () => {
           region: null,
           country: null,
           last_updated: '',
-          profile: profiles?.find(p => p.id === id),
+          profile: profilesData?.find(p => p.id === id),
         }));
 
       setLocations([...locationsWithProfiles, ...vendedoresWithoutLocation]);
@@ -175,6 +181,10 @@ const Localizar: React.FC = () => {
               <TabsTrigger value="list" className="flex items-center gap-2">
                 <List className="w-4 h-4" />
                 Lista
+              </TabsTrigger>
+              <TabsTrigger value="history" className="flex items-center gap-2">
+                <History className="w-4 h-4" />
+                Histórico
               </TabsTrigger>
             </TabsList>
             
@@ -279,6 +289,10 @@ const Localizar: React.FC = () => {
               </Card>
             ))}
           </div>
+            </TabsContent>
+            
+            <TabsContent value="history">
+              <LocationHistory vendedorIds={vendedorIds} profiles={profiles} />
             </TabsContent>
           </Tabs>
         )}

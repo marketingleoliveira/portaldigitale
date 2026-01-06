@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -36,6 +36,7 @@ const fetchGeoLocation = async (): Promise<GeoLocationData | null> => {
 
 export const useLocationTracking = () => {
   const { user } = useAuth();
+  const lastLocationRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -44,7 +45,11 @@ export const useLocationTracking = () => {
       const geoData = await fetchGeoLocation();
       if (!geoData) return;
 
-      const { error } = await supabase
+      // Create a location signature to avoid duplicate entries
+      const locationSignature = `${geoData.latitude},${geoData.longitude}`;
+      
+      // Update current location
+      const { error: upsertError } = await supabase
         .from('user_locations')
         .upsert({
           user_id: user.id,
@@ -59,8 +64,29 @@ export const useLocationTracking = () => {
           onConflict: 'user_id',
         });
 
-      if (error) {
-        console.error('Error updating location:', error);
+      if (upsertError) {
+        console.error('Error updating location:', upsertError);
+      }
+
+      // Add to history only if location changed or first entry
+      if (lastLocationRef.current !== locationSignature) {
+        const { error: historyError } = await supabase
+          .from('user_location_history')
+          .insert({
+            user_id: user.id,
+            ip_address: geoData.ip,
+            latitude: geoData.latitude,
+            longitude: geoData.longitude,
+            city: geoData.city,
+            region: geoData.region,
+            country: geoData.country,
+          });
+
+        if (historyError) {
+          console.error('Error inserting location history:', historyError);
+        } else {
+          lastLocationRef.current = locationSignature;
+        }
       }
     };
 
