@@ -160,6 +160,11 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
 
       setProfiles(profilesData || []);
       setSessions(sessionsData || []);
+      
+      // Initial calculation
+      if (profilesData && profilesData.length > 0) {
+        calculateActivities(sessionsData || [], profilesData);
+      }
     } catch (error) {
       console.error('Error fetching initial data:', error);
     } finally {
