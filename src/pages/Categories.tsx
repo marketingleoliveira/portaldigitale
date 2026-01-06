@@ -233,15 +233,27 @@ const Categories: React.FC = () => {
     setUpdatingCategory(true);
 
     try {
+      const oldCategoryName = editCategory.name;
+      const newCategoryName = editCategoryData.name.trim();
+
+      // Update the category
       const { error } = await supabase
         .from('categories')
         .update({
-          name: editCategoryData.name.trim(),
+          name: newCategoryName,
           description: editCategoryData.description.trim() || null,
         })
         .eq('id', editCategory.id);
 
       if (error) throw error;
+
+      // Update all files that use this category name
+      if (oldCategoryName !== newCategoryName) {
+        await supabase
+          .from('files')
+          .update({ category: newCategoryName })
+          .eq('category', oldCategoryName);
+      }
 
       toast({
         title: 'Sucesso',
