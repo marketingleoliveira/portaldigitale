@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { MapPin, Clock, Globe, Loader2, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { MapPin, Clock, Globe, Loader2, RefreshCw, Wifi, WifiOff, Map, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import LocationMap from '@/components/LocationMap';
 
 interface UserLocation {
   id: string;
@@ -164,6 +166,33 @@ const Localizar: React.FC = () => {
             </CardContent>
           </Card>
         ) : (
+          <Tabs defaultValue="map" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="map" className="flex items-center gap-2">
+                <Map className="w-4 h-4" />
+                Mapa
+              </TabsTrigger>
+              <TabsTrigger value="list" className="flex items-center gap-2">
+                <List className="w-4 h-4" />
+                Lista
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="map">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Mapa de Localizações</CardTitle>
+                  <CardDescription>
+                    {locations.filter(l => l.latitude != null).length} vendedores com localização disponível
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <LocationMap locations={locations} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="list">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {locations.map((location) => (
               <Card key={location.user_id} className="hover:shadow-md transition-shadow">
@@ -250,6 +279,8 @@ const Localizar: React.FC = () => {
               </Card>
             ))}
           </div>
+            </TabsContent>
+          </Tabs>
         )}
       </div>
     </DashboardLayout>
