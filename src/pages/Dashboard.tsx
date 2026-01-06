@@ -6,7 +6,6 @@ import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { 
-  Package, 
   Users, 
   FolderOpen, 
   Activity, 
@@ -16,12 +15,11 @@ import {
   HelpCircle,
   TicketIcon,
   ArrowRight,
-  Clock
+  Link2,
+  ExternalLink
 } from 'lucide-react';
 import RoleBadge from '@/components/RoleBadge';
 import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import OnlineUsersCard from '@/components/OnlineUsersCard';
 
 interface DashboardStats {
@@ -34,10 +32,11 @@ interface DashboardStats {
   openTickets: number;
 }
 
-interface RecentActivity {
-  type: 'product' | 'notification' | 'file';
-  title: string;
-  date: string;
+interface LinkFile {
+  id: string;
+  name: string;
+  file_url: string;
+  description: string | null;
 }
 
 const Dashboard: React.FC = () => {
@@ -51,7 +50,7 @@ const Dashboard: React.FC = () => {
     unreadNotifications: 0,
     openTickets: 0,
   });
-  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+  const [linkFiles, setLinkFiles] = useState<LinkFile[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -94,20 +93,15 @@ const Dashboard: React.FC = () => {
           logsCount = logs || 0;
         }
 
-        // Fetch recent activities
-        const { data: recentProducts } = await supabase
-          .from('products')
-          .select('name, created_at')
-          .order('created_at', { ascending: false })
-          .limit(3);
+        // Fetch links from LINKS category
+        const { data: linksData } = await supabase
+          .from('files')
+          .select('id, name, file_url, description')
+          .eq('category', 'LINKS')
+          .eq('is_external_link', true)
+          .order('name', { ascending: true });
 
-        const activities: RecentActivity[] = (recentProducts || []).map(p => ({
-          type: 'product' as const,
-          title: p.name,
-          date: p.created_at,
-        }));
-
-        setRecentActivities(activities);
+        setLinkFiles(linksData || []);
 
         setStats({
           totalProducts: productsCount || 0,
@@ -440,34 +434,41 @@ const Dashboard: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Recent Products */}
+          {/* Links Rápidos */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-primary" />
-                Produtos Recentes
+                <Link2 className="w-5 h-5 text-primary" />
+                Links Úteis
               </CardTitle>
               <CardDescription>
-                Últimos produtos adicionados
+                Acesso rápido a sistemas e recursos
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {recentActivities.length === 0 ? (
-                <p className="text-muted-foreground text-sm">Nenhum produto recente</p>
+              {linkFiles.length === 0 ? (
+                <p className="text-muted-foreground text-sm">Nenhum link disponível</p>
               ) : (
                 <div className="space-y-3">
-                  {recentActivities.map((activity, index) => (
-                    <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                  {linkFiles.map((link) => (
+                    <a 
+                      key={link.id} 
+                      href={link.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors group"
+                    >
                       <div className="p-2 rounded-lg bg-primary/10">
-                        <Package className="w-4 h-4 text-primary" />
+                        <ExternalLink className="w-4 h-4 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{activity.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {activity.date && format(new Date(activity.date), "dd/MM/yyyy", { locale: ptBR })}
-                        </p>
+                        <p className="font-medium truncate">{link.name}</p>
+                        {link.description && (
+                          <p className="text-xs text-muted-foreground truncate">{link.description}</p>
+                        )}
                       </div>
-                    </div>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                    </a>
                   ))}
                 </div>
               )}
