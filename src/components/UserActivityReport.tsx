@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,14 @@ interface UserProfile {
   avatar_url: string | null;
 }
 
+interface Session {
+  id: string;
+  user_id: string;
+  session_start: string;
+  session_end: string | null;
+  duration_seconds: number | null;
+}
+
 interface PeriodActivity {
   total_duration: number;
   session_count: number;
@@ -42,15 +50,62 @@ interface UserActivityReportProps {
 const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
   const [loading, setLoading] = useState(true);
   const [activities, setActivities] = useState<ActivityData[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const { isUserOnline, onlineCount } = useOnlineUsers();
+  const tickRef = useRef<number>(0);
+  const [tick, setTick] = useState(0);
 
+  // Fetch initial data
   useEffect(() => {
-    fetchActivityData();
-    
-    // Auto-refresh every 1 second for real-time accuracy
-    const interval = setInterval(fetchActivityData, 1000);
+    fetchInitialData();
+  }, []);
+
+  // Real-time subscription for session changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('activity-sessions-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_activity_sessions',
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setSessions(prev => [...prev, payload.new as Session]);
+          } else if (payload.eventType === 'UPDATE') {
+            setSessions(prev => prev.map(s => 
+              s.id === (payload.new as Session).id ? payload.new as Session : s
+            ));
+          } else if (payload.eventType === 'DELETE') {
+            setSessions(prev => prev.filter(s => s.id !== (payload.old as Session).id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Tick every second to recalculate active session durations
+  useEffect(() => {
+    const interval = setInterval(() => {
+      tickRef.current += 1;
+      setTick(tickRef.current);
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Recalculate activities when sessions, profiles, or tick changes
+  useEffect(() => {
+    if (profiles.length > 0) {
+      calculateActivities();
+    }
+  }, [sessions, profiles, tick]);
 
   const getDateRanges = () => {
     const now = new Date();
@@ -71,93 +126,104 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
       day: { start: dayStart.getTime() },
       week: { start: weekStart.getTime() },
       month: { start: monthStart.getTime() },
-      queryStart: monthStart.toISOString(), // For DB query (furthest back)
+      queryStart: monthStart.toISOString(),
     };
   };
 
-  const fetchActivityData = async () => {
+  const fetchInitialData = async () => {
     setLoading(true);
     try {
       const ranges = getDateRanges();
 
       // Fetch all profiles
-      const { data: profiles, error: profilesError } = await supabase
+      const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('id, full_name, email, avatar_url')
         .eq('is_active', true);
 
       if (profilesError) throw profilesError;
 
-      // Fetch all sessions from the last 30 days (covers all periods)
-      const { data: allSessions, error: sessionsError } = await supabase
+      // Fetch all sessions from the last 30 days
+      const { data: sessionsData, error: sessionsError } = await supabase
         .from('user_activity_sessions')
-        .select('user_id, duration_seconds, session_start, session_end')
+        .select('id, user_id, duration_seconds, session_start, session_end')
         .gte('session_start', ranges.queryStart);
 
       if (sessionsError) throw sessionsError;
 
-      // Aggregate by user for each period
-      const userActivityMap = new Map<string, { day: PeriodActivity; week: PeriodActivity; month: PeriodActivity }>();
-      
-      const { day: dayRange, week: weekRange, month: monthRange } = ranges;
-
-      (allSessions || []).forEach(session => {
-        const sessionStart = new Date(session.session_start).getTime();
-        
-        // Calculate duration
-        let duration = session.duration_seconds || 0;
-        if (!session.session_end && session.session_start) {
-          duration = Math.floor((Date.now() - sessionStart) / 1000);
-        }
-
-        const existing = userActivityMap.get(session.user_id) || {
-          day: { total_duration: 0, session_count: 0 },
-          week: { total_duration: 0, session_count: 0 },
-          month: { total_duration: 0, session_count: 0 },
-        };
-
-        // Add to month if within 30 days
-        if (sessionStart >= monthRange.start) {
-          existing.month.total_duration += duration;
-          existing.month.session_count += 1;
-        }
-
-        // Add to week if within week range (Monday to now)
-        if (sessionStart >= weekRange.start) {
-          existing.week.total_duration += duration;
-          existing.week.session_count += 1;
-        }
-
-        // Add to day if within last 24 hours
-        if (sessionStart >= dayRange.start) {
-          existing.day.total_duration += duration;
-          existing.day.session_count += 1;
-        }
-
-        userActivityMap.set(session.user_id, existing);
-      });
-
-      // Build activity data with profiles
-      const activityData: ActivityData[] = (profiles || []).map(profile => {
-        const activity = userActivityMap.get(profile.id);
-        return {
-          user_id: profile.id,
-          day: activity?.day || { total_duration: 0, session_count: 0 },
-          week: activity?.week || { total_duration: 0, session_count: 0 },
-          month: activity?.month || { total_duration: 0, session_count: 0 },
-          profile,
-        };
-      });
-
-      // Sort by day duration descending
-      activityData.sort((a, b) => b.day.total_duration - a.day.total_duration);
-
-      setActivities(activityData);
+      setProfiles(profilesData || []);
+      setSessions(sessionsData || []);
     } catch (error) {
-      console.error('Error fetching activity data:', error);
+      console.error('Error fetching initial data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const calculateActivities = () => {
+    const ranges = getDateRanges();
+    const { day: dayRange, week: weekRange, month: monthRange } = ranges;
+    const now = Date.now();
+
+    // Aggregate by user for each period
+    const userActivityMap = new Map<string, { day: PeriodActivity; week: PeriodActivity; month: PeriodActivity }>();
+
+    sessions.forEach(session => {
+      const sessionStart = new Date(session.session_start).getTime();
+      
+      // Calculate duration - for active sessions, calculate from session_start to now
+      let duration: number;
+      if (!session.session_end) {
+        // Active session - calculate real-time duration
+        duration = Math.floor((now - sessionStart) / 1000);
+      } else {
+        // Completed session - use stored duration or calculate from timestamps
+        duration = session.duration_seconds || Math.floor((new Date(session.session_end).getTime() - sessionStart) / 1000);
+      }
+
+      const existing = userActivityMap.get(session.user_id) || {
+        day: { total_duration: 0, session_count: 0 },
+        week: { total_duration: 0, session_count: 0 },
+        month: { total_duration: 0, session_count: 0 },
+      };
+
+      // Add to month if within 30 days
+      if (sessionStart >= monthRange.start) {
+        existing.month.total_duration += duration;
+        existing.month.session_count += 1;
+      }
+
+      // Add to week if within week range (Monday to now)
+      if (sessionStart >= weekRange.start) {
+        existing.week.total_duration += duration;
+        existing.week.session_count += 1;
+      }
+
+      // Add to day if within last 24 hours
+      if (sessionStart >= dayRange.start) {
+        existing.day.total_duration += duration;
+        existing.day.session_count += 1;
+      }
+
+      userActivityMap.set(session.user_id, existing);
+    });
+
+    // Build activity data with profiles
+    const activityData: ActivityData[] = profiles.map(profile => {
+      const activity = userActivityMap.get(profile.id);
+      return {
+        user_id: profile.id,
+        day: activity?.day || { total_duration: 0, session_count: 0 },
+        week: activity?.week || { total_duration: 0, session_count: 0 },
+        month: activity?.month || { total_duration: 0, session_count: 0 },
+        profile,
+      };
+    });
+
+    // Sort by day duration descending
+    activityData.sort((a, b) => b.day.total_duration - a.day.total_duration);
+
+    setActivities(activityData);
   };
 
   const formatDuration = (seconds: number) => {
