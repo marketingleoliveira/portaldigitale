@@ -29,6 +29,7 @@ import Team from "./pages/Team";
 import TimeClock from "./pages/TimeClock";
 import Goals from "./pages/Goals";
 import Updates from "./pages/Updates";
+import Localizar from "./pages/Localizar";
 
 const queryClient = new QueryClient();
 
@@ -62,6 +63,7 @@ const App = () => (
               <Route path="/tickets/novo" element={<ProtectedRoute><NewTicket /></ProtectedRoute>} />
               <Route path="/tickets/:id" element={<ProtectedRoute><TicketDetails /></ProtectedRoute>} />
               <Route path="/ponto" element={<ProtectedRoute><TimeClock /></ProtectedRoute>} />
+              <Route path="/localizar" element={<ProtectedRoute allowedRoles={['dev']}><Localizar /></ProtectedRoute>} />
               <Route path="/metas" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
               <Route path="/atualizacoes" element={<ProtectedRoute><Updates /></ProtectedRoute>} />
               

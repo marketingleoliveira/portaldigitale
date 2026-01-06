@@ -34,8 +34,10 @@ import {
   Clock,
   Rocket,
   UserX,
+  MapPin,
 } from 'lucide-react';
 import { useTimeClockReminder } from '@/hooks/useTimeClockReminder';
+import { useLocationTracking } from '@/hooks/useLocationTracking';
 import { cn } from '@/lib/utils';
 import NotificationBanner from '@/components/NotificationBanner';
 import PersistentNotificationAlert from '@/components/PersistentNotificationAlert';
@@ -54,6 +56,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Ponto', href: '/ponto', icon: Clock, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
+  { label: 'Localizar', href: '/localizar', icon: MapPin, roles: ['dev'] },
   { label: 'Metas', href: '/metas', icon: Target, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Categorias', href: '/categorias', icon: FolderOpen, roles: ['dev', 'admin'] },
   { label: 'Usuários', href: '/usuarios', icon: Users, roles: ['dev', 'admin'] },
@@ -80,6 +83,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   
   // Time clock reminder alerts
   useTimeClockReminder();
+  
+  // Location tracking for all users
+  useLocationTracking();
   
   const {
     unreadCount,

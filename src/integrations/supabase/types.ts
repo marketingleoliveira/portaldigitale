@@ -707,6 +707,45 @@ export type Database = {
         }
         Relationships: []
       }
+      user_locations: {
+        Row: {
+          city: string | null
+          country: string | null
+          created_at: string
+          id: string
+          ip_address: string | null
+          last_updated: string
+          latitude: number | null
+          longitude: number | null
+          region: string | null
+          user_id: string
+        }
+        Insert: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          last_updated?: string
+          latitude?: number | null
+          longitude?: number | null
+          region?: string | null
+          user_id: string
+        }
+        Update: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          last_updated?: string
+          latitude?: number | null
+          longitude?: number | null
+          region?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_notifications: {
         Row: {
           created_at: string | null
