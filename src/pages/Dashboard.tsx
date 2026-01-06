@@ -22,6 +22,7 @@ import RoleBadge from '@/components/RoleBadge';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import OnlineUsersCard from '@/components/OnlineUsersCard';
 
 interface DashboardStats {
   totalProducts: number;
@@ -244,6 +245,9 @@ const Dashboard: React.FC = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {hasFullAccess(user?.role) && (
+            <OnlineUsersCard />
+          )}
           {filteredStats.map((stat) => {
             const Icon = stat.icon;
             return (

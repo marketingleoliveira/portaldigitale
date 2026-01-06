@@ -707,6 +707,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_activity_sessions: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          id: string
+          session_end: string | null
+          session_start: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          id?: string
+          session_end?: string | null
+          session_start?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          id?: string
+          session_end?: string | null
+          session_start?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_location_history: {
         Row: {
           city: string | null
@@ -806,6 +833,33 @@ export type Database = {
           message?: string
           target_user_id?: string | null
           title?: string
+        }
+        Relationships: []
+      }
+      user_presence: {
+        Row: {
+          created_at: string
+          id: string
+          is_online: boolean
+          last_seen: string
+          session_started: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_online?: boolean
+          last_seen?: string
+          session_started?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_online?: boolean
+          last_seen?: string
+          session_started?: string | null
+          user_id?: string
         }
         Relationships: []
       }

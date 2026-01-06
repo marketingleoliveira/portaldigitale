@@ -34,6 +34,7 @@ import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import UserActivityReport from '@/components/UserActivityReport';
 
 interface UserProfile {
   id: string;
@@ -89,6 +90,7 @@ const Reports: React.FC = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<EditingTimeRecord | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [showActivityReport, setShowActivityReport] = useState(false);
   const [stats, setStats] = useState({
     totalLogins: 0,
     uniqueUsers: 0,
@@ -468,6 +470,14 @@ const Reports: React.FC = () => {
                 </div>
               </div>
               <Button 
+                onClick={() => setShowActivityReport(true)}
+                variant={showActivityReport ? "default" : "outline"}
+                className="gap-2"
+              >
+                <Activity className="w-4 h-4" />
+                ATIVIDADE
+              </Button>
+              <Button 
                 onClick={() => fetchTimeRecords(selectedUser.id)}
                 variant={showTimeRecords ? "default" : "outline"}
                 className="gap-2"
@@ -482,6 +492,15 @@ const Reports: React.FC = () => {
               </Button>
             </div>
           </div>
+
+          {/* Activity Report Modal */}
+          {showActivityReport && (
+            <Card>
+              <CardContent className="pt-6">
+                <UserActivityReport onClose={() => setShowActivityReport(false)} />
+              </CardContent>
+            </Card>
+          )}
 
           {/* User Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

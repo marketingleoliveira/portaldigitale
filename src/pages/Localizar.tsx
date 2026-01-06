@@ -4,13 +4,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { MapPin, Clock, Globe, Loader2, RefreshCw, Wifi, WifiOff, Map, List, History } from 'lucide-react';
+import { MapPin, Clock, Globe, Loader2, RefreshCw, Wifi, WifiOff, Map, List, History, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import LocationMap from '@/components/LocationMap';
 import LocationHistory from '@/components/LocationHistory';
+import { useOnlineUsers } from '@/hooks/useOnlineUsers';
 
 interface UserLocation {
   id: string;
@@ -35,6 +36,7 @@ const Localizar: React.FC = () => {
   const [profiles, setProfiles] = useState<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { isUserOnline, onlineCount } = useOnlineUsers();
 
   const fetchLocations = async () => {
     try {
@@ -132,7 +134,11 @@ const Localizar: React.FC = () => {
     };
   }, []);
 
-  const isOnline = (lastUpdated: string) => {
+  const checkOnlineStatus = (userId: string, lastUpdated: string) => {
+    // First check presence system
+    if (isUserOnline(userId)) return true;
+    
+    // Fallback to last_updated check
     if (!lastUpdated) return false;
     const diff = Date.now() - new Date(lastUpdated).getTime();
     return diff < 10 * 60 * 1000; // Less than 10 minutes
@@ -154,10 +160,17 @@ const Localizar: React.FC = () => {
               Acompanhe a geolocalização em tempo real dos vendedores
             </p>
           </div>
-          <Button onClick={fetchLocations} variant="outline" disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Atualizar
-          </Button>
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="gap-1 px-3 py-1.5">
+              <Users className="w-4 h-4" />
+              <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+              {locations.filter(l => checkOnlineStatus(l.user_id, l.last_updated)).length} online
+            </Badge>
+            <Button onClick={fetchLocations} variant="outline" disabled={loading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
+          </div>
         </div>
 
         {loading ? (
@@ -232,10 +245,10 @@ const Localizar: React.FC = () => {
                       </div>
                     </div>
                     <Badge 
-                      variant={isOnline(location.last_updated) ? 'default' : 'secondary'}
-                      className={isOnline(location.last_updated) ? 'bg-green-500' : ''}
+                      variant={checkOnlineStatus(location.user_id, location.last_updated) ? 'default' : 'secondary'}
+                      className={checkOnlineStatus(location.user_id, location.last_updated) ? 'bg-green-500' : ''}
                     >
-                      {isOnline(location.last_updated) ? (
+                      {checkOnlineStatus(location.user_id, location.last_updated) ? (
                         <><Wifi className="w-3 h-3 mr-1" /> Online</>
                       ) : (
                         <><WifiOff className="w-3 h-3 mr-1" /> Offline</>
