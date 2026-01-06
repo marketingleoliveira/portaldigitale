@@ -35,6 +35,8 @@ import { Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import UserActivityReport from '@/components/UserActivityReport';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface UserProfile {
   id: string;
@@ -306,6 +308,213 @@ const Reports: React.FC = () => {
     } catch (error) {
       console.error('Error downloading time records:', error);
       alert('Erro ao gerar arquivo de ponto.');
+    }
+  };
+
+  const calculateWorkedHours = (record: TimeRecord): { morning: string; afternoon: string; total: string } => {
+    let morningMinutes = 0;
+    let afternoonMinutes = 0;
+
+    // Morning: entry_time to lunch_exit_time
+    if (record.entry_time && record.lunch_exit_time) {
+      const entry = new Date(record.entry_time);
+      const lunchExit = new Date(record.lunch_exit_time);
+      morningMinutes = Math.max(0, (lunchExit.getTime() - entry.getTime()) / 60000);
+    }
+
+    // Afternoon: lunch_return_time to exit_time
+    if (record.lunch_return_time && record.exit_time) {
+      const lunchReturn = new Date(record.lunch_return_time);
+      const exit = new Date(record.exit_time);
+      afternoonMinutes = Math.max(0, (exit.getTime() - lunchReturn.getTime()) / 60000);
+    }
+
+    const totalMinutes = morningMinutes + afternoonMinutes;
+
+    const formatMinutesToHours = (mins: number) => {
+      const hours = Math.floor(mins / 60);
+      const minutes = Math.round(mins % 60);
+      return `${hours}h${minutes.toString().padStart(2, '0')}min`;
+    };
+
+    return {
+      morning: morningMinutes > 0 ? formatMinutesToHours(morningMinutes) : '-',
+      afternoon: afternoonMinutes > 0 ? formatMinutesToHours(afternoonMinutes) : '-',
+      total: totalMinutes > 0 ? formatMinutesToHours(totalMinutes) : '-',
+    };
+  };
+
+  const downloadTimeRecordsPDF = async (userId: string, userName: string) => {
+    try {
+      // Fetch ALL time records for this user
+      const { data, error } = await supabase
+        .from('time_records')
+        .select('*')
+        .eq('user_id', userId)
+        .order('record_date', { ascending: true });
+
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        alert('Nenhum registro de ponto encontrado para este usuário.');
+        return;
+      }
+
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 20;
+
+      // Header
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('RELATÓRIO DE PONTO', pageWidth / 2, 25, { align: 'center' });
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, pageWidth / 2, 32, { align: 'center' });
+
+      // User info box
+      doc.setDrawColor(200, 200, 200);
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(margin, 40, pageWidth - 2 * margin, 25, 3, 3, 'FD');
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Colaborador:', margin + 5, 50);
+      doc.setFont('helvetica', 'normal');
+      doc.text(userName, margin + 45, 50);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Período:', margin + 5, 58);
+      doc.setFont('helvetica', 'normal');
+      const firstDate = format(new Date(data[0].record_date + 'T00:00:00'), 'dd/MM/yyyy');
+      const lastDate = format(new Date(data[data.length - 1].record_date + 'T00:00:00'), 'dd/MM/yyyy');
+      doc.text(`${firstDate} a ${lastDate}`, margin + 30, 58);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total de registros:', pageWidth / 2 + 10, 58);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${data.length} dias`, pageWidth / 2 + 55, 58);
+
+      // Calculate totals
+      let totalWorkedMinutes = 0;
+      const tableData = data.map(record => {
+        const hours = calculateWorkedHours(record);
+        
+        // Parse total hours for sum
+        if (hours.total !== '-') {
+          const match = hours.total.match(/(\d+)h(\d+)min/);
+          if (match) {
+            totalWorkedMinutes += parseInt(match[1]) * 60 + parseInt(match[2]);
+          }
+        }
+
+        return [
+          format(new Date(record.record_date + 'T00:00:00'), 'dd/MM/yyyy'),
+          record.entry_time ? format(new Date(record.entry_time), 'HH:mm') : '-',
+          record.lunch_exit_time ? format(new Date(record.lunch_exit_time), 'HH:mm') : '-',
+          record.lunch_return_time ? format(new Date(record.lunch_return_time), 'HH:mm') : '-',
+          record.exit_time ? format(new Date(record.exit_time), 'HH:mm') : '-',
+          hours.total,
+        ];
+      });
+
+      const totalHours = Math.floor(totalWorkedMinutes / 60);
+      const totalMins = totalWorkedMinutes % 60;
+      const totalWorkedFormatted = `${totalHours}h${totalMins.toString().padStart(2, '0')}min`;
+
+      // Table
+      autoTable(doc, {
+        startY: 72,
+        head: [['Data', 'Entrada', 'Saída Almoço', 'Retorno', 'Saída', 'Total Dia']],
+        body: tableData,
+        theme: 'striped',
+        headStyles: {
+          fillColor: [59, 130, 246],
+          textColor: 255,
+          fontStyle: 'bold',
+          halign: 'center',
+        },
+        bodyStyles: {
+          halign: 'center',
+          fontSize: 9,
+        },
+        columnStyles: {
+          0: { halign: 'left', fontStyle: 'bold' },
+          5: { fontStyle: 'bold', textColor: [59, 130, 246] },
+        },
+        margin: { left: margin, right: margin },
+        didDrawPage: (data) => {
+          // Footer on each page
+          doc.setFontSize(8);
+          doc.setTextColor(150);
+          doc.text(
+            `Página ${doc.getCurrentPageInfo().pageNumber}`,
+            pageWidth / 2,
+            pageHeight - 10,
+            { align: 'center' }
+          );
+        },
+      });
+
+      // Get final Y position after table
+      const finalY = (doc as any).lastAutoTable.finalY || 150;
+
+      // Summary box
+      if (finalY + 60 > pageHeight - 80) {
+        doc.addPage();
+      }
+
+      const summaryY = finalY + 15;
+      doc.setDrawColor(59, 130, 246);
+      doc.setFillColor(239, 246, 255);
+      doc.roundedRect(margin, summaryY, pageWidth - 2 * margin, 20, 3, 3, 'FD');
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0);
+      doc.text('TOTAL DE HORAS TRABALHADAS:', margin + 10, summaryY + 13);
+      doc.setFontSize(14);
+      doc.setTextColor(59, 130, 246);
+      doc.text(totalWorkedFormatted, pageWidth - margin - 10, summaryY + 13, { align: 'right' });
+
+      // Signature section
+      const signatureY = summaryY + 40;
+      doc.setTextColor(0);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+
+      // User signature
+      doc.setDrawColor(100);
+      doc.line(margin, signatureY + 20, margin + 70, signatureY + 20);
+      doc.text('Assinatura do Colaborador', margin, signatureY + 28);
+      doc.setFontSize(8);
+      doc.text(userName, margin, signatureY + 35);
+
+      // Admin signature
+      doc.setFontSize(10);
+      doc.line(pageWidth - margin - 70, signatureY + 20, pageWidth - margin, signatureY + 20);
+      doc.text('Assinatura do Administrativo', pageWidth - margin - 70, signatureY + 28);
+
+      // Date field
+      doc.text(`Data: ____/____/________`, pageWidth / 2 - 25, signatureY + 50);
+
+      // Legal notice
+      doc.setFontSize(7);
+      doc.setTextColor(100);
+      doc.text(
+        'Este documento é válido apenas com as assinaturas do colaborador e do responsável administrativo.',
+        pageWidth / 2,
+        signatureY + 60,
+        { align: 'center' }
+      );
+
+      // Save PDF
+      doc.save(`ponto_${userName.replace(/\s+/g, '_').toLowerCase()}_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Erro ao gerar PDF de ponto.');
     }
   };
 
@@ -612,15 +821,26 @@ const Reports: React.FC = () => {
                     </CardDescription>
                   </div>
                   {user?.role === 'dev' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      onClick={() => downloadTimeRecordsCSV(selectedUser.id, selectedUser.full_name)}
-                    >
-                      <Download className="w-4 h-4" />
-                      Exportar Histórico Completo
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => downloadTimeRecordsCSV(selectedUser.id, selectedUser.full_name)}
+                      >
+                        <Download className="w-4 h-4" />
+                        CSV
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => downloadTimeRecordsPDF(selectedUser.id, selectedUser.full_name)}
+                      >
+                        <FileText className="w-4 h-4" />
+                        PDF
+                      </Button>
+                    </div>
                   )}
                 </div>
               </CardHeader>
