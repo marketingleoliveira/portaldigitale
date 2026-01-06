@@ -249,10 +249,14 @@ const Categories: React.FC = () => {
 
       // Update all files that use this category name
       if (oldCategoryName !== newCategoryName) {
-        await supabase
+        const { error: filesError } = await supabase
           .from('files')
-          .update({ category: newCategoryName })
+          .update({ category: newCategoryName, updated_at: new Date().toISOString() })
           .eq('category', oldCategoryName);
+        
+        if (filesError) {
+          console.error('Error updating files category:', filesError);
+        }
       }
 
       toast({
