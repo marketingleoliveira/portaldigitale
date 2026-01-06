@@ -61,27 +61,30 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
     fetchInitialData();
   }, []);
 
-  // Real-time subscription for session changes
+  // Real-time subscription for session changes (only INSERT and DELETE, not UPDATE)
   useEffect(() => {
     const channel = supabase
       .channel('activity-sessions-realtime')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'user_activity_sessions',
         },
         (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setSessions(prev => [...prev, payload.new as Session]);
-          } else if (payload.eventType === 'UPDATE') {
-            setSessions(prev => prev.map(s => 
-              s.id === (payload.new as Session).id ? payload.new as Session : s
-            ));
-          } else if (payload.eventType === 'DELETE') {
-            setSessions(prev => prev.filter(s => s.id !== (payload.old as Session).id));
-          }
+          setSessions(prev => [...prev, payload.new as Session]);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'user_activity_sessions',
+        },
+        (payload) => {
+          setSessions(prev => prev.filter(s => s.id !== (payload.old as Session).id));
         }
       )
       .subscribe();
