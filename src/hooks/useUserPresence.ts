@@ -52,7 +52,7 @@ export const useUserPresence = () => {
     }
   }, [user?.id]);
 
-  // Update session duration in real-time
+  // Update session duration in real-time (only duration, NOT session_end - that's for when session truly ends)
   const updateSessionDuration = useCallback(async () => {
     if (!user?.id || !sessionIdRef.current || !sessionStartRef.current) return;
 
@@ -64,7 +64,7 @@ export const useUserPresence = () => {
         .from('user_activity_sessions')
         .update({
           duration_seconds: durationSeconds,
-          session_end: now.toISOString(),
+          // Don't set session_end here - only set it when session truly ends
         })
         .eq('id', sessionIdRef.current);
     } catch (error) {
@@ -103,17 +103,28 @@ export const useUserPresence = () => {
   }, [user?.id, updatePresence]);
 
   const endSession = useCallback(async () => {
-    if (!user?.id || !sessionIdRef.current) return;
+    if (!user?.id || !sessionIdRef.current || !sessionStartRef.current) return;
 
     try {
-      await updateSessionDuration();
+      const now = new Date();
+      const durationSeconds = Math.floor((now.getTime() - sessionStartRef.current.getTime()) / 1000);
+
+      // Set session_end only when session truly ends
+      await supabase
+        .from('user_activity_sessions')
+        .update({
+          duration_seconds: durationSeconds,
+          session_end: now.toISOString(),
+        })
+        .eq('id', sessionIdRef.current);
+
       await updatePresence(false);
       sessionIdRef.current = null;
       sessionStartRef.current = null;
     } catch (error) {
       console.error('Error in endSession:', error);
     }
-  }, [user?.id, updatePresence, updateSessionDuration]);
+  }, [user?.id, updatePresence]);
 
   // Check for inactivity
   const checkInactivity = useCallback(async () => {
