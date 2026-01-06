@@ -27,7 +27,9 @@ import {
   FileVideo,
   FileAudio,
   FileSpreadsheet,
-  Presentation
+  Presentation,
+  FolderInput,
+  CheckSquare
 } from 'lucide-react';
 import {
   Dialog,
@@ -88,6 +90,13 @@ const FileManagement: React.FC = () => {
   const [fileToEdit, setFileToEdit] = useState<FileItem | null>(null);
   const [uploading, setUploading] = useState(false);
   const [updating, setUpdating] = useState(false);
+  
+  // Batch selection state
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
+  const [batchMoveDialogOpen, setBatchMoveDialogOpen] = useState(false);
+  const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = useState(false);
+  const [batchMoveCategoryId, setBatchMoveCategoryId] = useState('');
+  const [batchProcessing, setBatchProcessing] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -786,6 +795,96 @@ const FileManagement: React.FC = () => {
   const filteredSubcategories = getSubcategoriesForCategory(formData.category_id);
   const editFilteredSubcategories = getSubcategoriesForCategory(editFormData.category_id);
 
+  // Batch selection helpers
+  const toggleFileSelection = (fileId: string) => {
+    setSelectedFileIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(fileId)) {
+        newSet.delete(fileId);
+      } else {
+        newSet.add(fileId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedFileIds.size === filteredFiles.length) {
+      setSelectedFileIds(new Set());
+    } else {
+      setSelectedFileIds(new Set(filteredFiles.map(f => f.id)));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedFileIds(new Set());
+  };
+
+  const handleBatchMove = async () => {
+    if (!batchMoveCategoryId || selectedFileIds.size === 0) return;
+    
+    setBatchProcessing(true);
+    try {
+      const categoryName = getCategoryName(batchMoveCategoryId);
+      
+      const { error } = await supabase
+        .from('files')
+        .update({ category: categoryName, updated_at: new Date().toISOString() })
+        .in('id', Array.from(selectedFileIds));
+
+      if (error) throw error;
+
+      toast.success(`${selectedFileIds.size} arquivo(s) movido(s) para ${categoryName}`);
+      setBatchMoveDialogOpen(false);
+      setBatchMoveCategoryId('');
+      clearSelection();
+      fetchFiles();
+    } catch (error: any) {
+      console.error('Error moving files:', error);
+      toast.error(error.message || 'Erro ao mover arquivos');
+    } finally {
+      setBatchProcessing(false);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedFileIds.size === 0) return;
+    
+    setBatchProcessing(true);
+    try {
+      const filesToDelete = files.filter(f => selectedFileIds.has(f.id));
+      
+      // Delete from storage (only non-external links)
+      for (const file of filesToDelete) {
+        if (!file.is_external_link) {
+          const urlParts = file.file_url.split('/');
+          const fileName = urlParts[urlParts.length - 1];
+          await supabase.storage.from('files').remove([fileName]);
+        }
+      }
+
+      // Delete file records
+      const { error } = await supabase
+        .from('files')
+        .delete()
+        .in('id', Array.from(selectedFileIds));
+
+      if (error) throw error;
+
+      toast.success(`${selectedFileIds.size} arquivo(s) excluído(s)`);
+      setBatchDeleteDialogOpen(false);
+      clearSelection();
+      fetchFiles();
+    } catch (error: any) {
+      console.error('Error deleting files:', error);
+      toast.error(error.message || 'Erro ao excluir arquivos');
+    } finally {
+      setBatchProcessing(false);
+    }
+  };
+
+  const selectedCount = selectedFileIds.size;
+
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
@@ -1221,6 +1320,47 @@ const FileManagement: React.FC = () => {
           </CardContent>
         </Card>
 
+        {/* Batch Actions Bar */}
+        {selectedCount > 0 && (
+          <Card className="bg-primary/5 border-primary/20">
+            <CardContent className="py-3">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                  <CheckSquare className="w-5 h-5 text-primary" />
+                  <span className="font-medium">{selectedCount} arquivo(s) selecionado(s)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBatchMoveDialogOpen(true)}
+                  >
+                    <FolderInput className="w-4 h-4 mr-2" />
+                    Mover para Categoria
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive border-destructive/50 hover:bg-destructive/10"
+                    onClick={() => setBatchDeleteDialogOpen(true)}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Excluir Selecionados
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearSelection}
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Limpar
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Files Table */}
         <Card>
           <CardHeader>
@@ -1244,6 +1384,13 @@ const FileManagement: React.FC = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={selectedFileIds.size === filteredFiles.length && filteredFiles.length > 0}
+                          onCheckedChange={toggleSelectAll}
+                          aria-label="Selecionar todos"
+                        />
+                      </TableHead>
                       <TableHead>Nome</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead>Tamanho</TableHead>
@@ -1252,7 +1399,17 @@ const FileManagement: React.FC = () => {
                   </TableHeader>
                   <TableBody>
                     {filteredFiles.map((file) => (
-                      <TableRow key={file.id}>
+                      <TableRow 
+                        key={file.id}
+                        className={selectedFileIds.has(file.id) ? 'bg-primary/5' : ''}
+                      >
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedFileIds.has(file.id)}
+                            onCheckedChange={() => toggleFileSelection(file.id)}
+                            aria-label={`Selecionar ${file.name}`}
+                          />
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             {getFileIcon(file)}
@@ -1524,6 +1681,83 @@ const FileManagement: React.FC = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Batch Move Dialog */}
+        <AlertDialog open={batchMoveDialogOpen} onOpenChange={setBatchMoveDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Mover Arquivos</AlertDialogTitle>
+              <AlertDialogDescription>
+                Selecione a categoria de destino para {selectedCount} arquivo(s).
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+              <Select
+                value={batchMoveCategoryId}
+                onValueChange={setBatchMoveCategoryId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione uma categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setBatchMoveCategoryId('')}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleBatchMove}
+                disabled={!batchMoveCategoryId || batchProcessing}
+              >
+                {batchProcessing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Movendo...
+                  </>
+                ) : (
+                  'Mover'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Batch Delete Dialog */}
+        <AlertDialog open={batchDeleteDialogOpen} onOpenChange={setBatchDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir Arquivos</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja excluir {selectedCount} arquivo(s)?
+                Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleBatchDelete}
+                disabled={batchProcessing}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                {batchProcessing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Excluindo...
+                  </>
+                ) : (
+                  'Excluir'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardLayout>
   );
