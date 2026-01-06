@@ -62,6 +62,26 @@ const Downloads: React.FC = () => {
 
   useEffect(() => {
     fetchFiles();
+
+    // Subscribe to realtime updates on files table
+    const channel = supabase
+      .channel('files-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'files',
+        },
+        () => {
+          fetchFiles();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchFiles = async () => {
