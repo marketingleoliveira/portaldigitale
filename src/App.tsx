@@ -8,6 +8,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { useLocationTracking } from "@/hooks/useLocationTracking";
+import { LocationRequestNotification } from "@/components/LocationRequestNotification";
 
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -39,7 +40,12 @@ const queryClient = new QueryClient();
 const PresenceTracker = ({ children }: { children: React.ReactNode }) => {
   useUserPresence();
   useLocationTracking();
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <LocationRequestNotification />
+    </>
+  );
 };
 
 const App = () => (
