@@ -55,7 +55,7 @@ const InactiveUsers: React.FC = () => {
       const { data: profiles, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('is_active', false)
+        .order('is_active', { ascending: true })
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
@@ -164,10 +164,10 @@ const InactiveUsers: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <UserX className="w-6 h-6 text-destructive" />
-              Usuários Inativos
+              Gerenciamento de Contas
             </h1>
             <p className="text-muted-foreground">
-              Usuários desativados do sistema. Você pode restaurá-los a qualquer momento.
+              Todas as contas do sistema. Você pode ativar ou desativar usuários.
             </p>
           </div>
         </div>
@@ -190,9 +190,9 @@ const InactiveUsers: React.FC = () => {
         {/* Users Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Lista de Inativos</CardTitle>
+            <CardTitle>Todas as Contas</CardTitle>
             <CardDescription>
-              {filteredUsers.length} usuário(s) inativo(s) encontrado(s)
+              {filteredUsers.length} conta(s) encontrada(s) - {filteredUsers.filter(u => u.is_active).length} ativa(s), {filteredUsers.filter(u => !u.is_active).length} inativa(s)
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -215,20 +215,21 @@ const InactiveUsers: React.FC = () => {
                       <TableHead>Usuário</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Cargo</TableHead>
-                      <TableHead>Desativado em</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Atualizado em</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredUsers.map((u) => (
-                      <TableRow key={u.id} className="opacity-70 hover:opacity-100 transition-opacity">
+                      <TableRow key={u.id} className={!u.is_active ? "opacity-70 hover:opacity-100 transition-opacity" : ""}>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             {u.avatar_url ? (
                               <img
                                 src={u.avatar_url}
                                 alt={u.full_name}
-                                className="w-10 h-10 rounded-full object-cover grayscale"
+                                className={`w-10 h-10 rounded-full object-cover ${!u.is_active ? 'grayscale' : ''}`}
                               />
                             ) : (
                               <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
@@ -236,7 +237,7 @@ const InactiveUsers: React.FC = () => {
                               </div>
                             )}
                             <div>
-                              <p className="font-medium line-through">{u.full_name}</p>
+                              <p className={`font-medium ${!u.is_active ? 'line-through text-muted-foreground' : ''}`}>{u.full_name}</p>
                               {u.phone && (
                                 <p className="text-sm text-muted-foreground">{u.phone}</p>
                               )}
@@ -251,21 +252,38 @@ const InactiveUsers: React.FC = () => {
                             <span className="text-muted-foreground text-sm">Sem cargo</span>
                           )}
                         </TableCell>
+                        <TableCell>
+                          {u.is_active ? (
+                            <span className="inline-flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
+                              <UserCheck className="w-4 h-4" />
+                              Ativo
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-sm text-destructive">
+                              <UserX className="w-4 h-4" />
+                              Inativo
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-muted-foreground">
                           {u.updated_at
                             ? format(new Date(u.updated_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
                             : '-'}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openRestoreDialog(u)}
-                            className="gap-2"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                            Restaurar
-                          </Button>
+                          {!u.is_active ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openRestoreDialog(u)}
+                              className="gap-2"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                              Restaurar
+                            </Button>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
