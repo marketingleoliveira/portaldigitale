@@ -36,6 +36,7 @@ import {
   Clock,
   Rocket,
   UserX,
+  DollarSign,
   MapPin,
 } from 'lucide-react';
 import { useTimeClockReminder } from '@/hooks/useTimeClockReminder';
@@ -66,6 +67,7 @@ const navItems: NavItem[] = [
   { label: 'Equipe', href: '/equipe', icon: UsersRound, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Arquivos', href: '/arquivos', icon: Upload, roles: ['dev', 'admin'] },
   { label: 'Relatórios', href: '/relatorios', icon: BarChart3, roles: ['dev', 'admin', 'gerente'] },
+  { label: 'Preços', href: '/precos', icon: DollarSign, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Materiais Comerciais', href: '/downloads', icon: FileText, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Notificações', href: '/notificacoes', icon: Bell, roles: ['dev', 'admin', 'gerente', 'vendedor'] },
   { label: 'Tickets', href: '/tickets', icon: TicketIcon, roles: ['dev', 'admin', 'gerente', 'vendedor'], highlight: true },

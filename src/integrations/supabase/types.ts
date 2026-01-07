@@ -402,6 +402,42 @@ export type Database = {
         }
         Relationships: []
       }
+      price_files: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          file_size: number | null
+          file_url: string
+          id: string
+          name: string
+          region: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          file_size?: number | null
+          file_url: string
+          id?: string
+          name: string
+          region?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          file_size?: number | null
+          file_url?: string
+          id?: string
+          name?: string
+          region?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       product_visibility: {
         Row: {
           id: string

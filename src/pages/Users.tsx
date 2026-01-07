@@ -61,7 +61,7 @@ const userSchema = z.object({
   role: z.enum(['admin', 'gerente', 'vendedor', 'dev']),
 });
 
-interface UserWithRole extends UserProfile {
+interface UserWithRole extends Omit<UserProfile, 'region'> {
   role?: AppRole;
   region?: string | null;
 }
