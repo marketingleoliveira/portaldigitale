@@ -21,9 +21,14 @@ const RoleBadge: React.FC<RoleBadgeProps> = ({ role, region, showIcon = true, si
   const Icon = icons[role];
 
   // For vendedor with region, show "Vendedor SP" format
-  const displayLabel = role === 'vendedor' && region 
-    ? `${ROLE_LABELS[role]} ${region}` 
-    : ROLE_LABELS[role];
+  // Special case for INTERNO region - display as "Vendedor Interno"
+  const getDisplayLabel = () => {
+    if (role !== 'vendedor' || !region) return ROLE_LABELS[role];
+    if (region === 'INTERNO') return 'Vendedor Interno';
+    return `${ROLE_LABELS[role]} ${region}`;
+  };
+
+  const displayLabel = getDisplayLabel();
 
   return (
     <Badge variant={role} className={size === 'sm' ? 'text-xs px-2 py-0.5' : ''}>
