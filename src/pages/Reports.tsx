@@ -15,7 +15,7 @@ import {
 import {
   BarChart3, Users, Activity, TrendingUp, Loader2, 
   User, Download, LogIn, FileText, ChevronLeft, Calendar,
-  Clock, Globe, Timer, Trash2, Pencil, Save, X
+  Clock, Globe, Timer, Trash2, Pencil, Save, X, LogOut, AlertTriangle
 } from 'lucide-react';
 import {
   Dialog,
@@ -37,6 +37,19 @@ import { ptBR } from 'date-fns/locale';
 import UserActivityReport from '@/components/UserActivityReport';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { toast } from 'sonner';
+import { hasFullAccess } from '@/types/auth';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface UserProfile {
   id: string;
@@ -93,6 +106,7 @@ const Reports: React.FC = () => {
   const [editingRecord, setEditingRecord] = useState<EditingTimeRecord | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [showActivityReport, setShowActivityReport] = useState(false);
+  const [forceLogoutLoading, setForceLogoutLoading] = useState(false);
   const [stats, setStats] = useState({
     totalLogins: 0,
     uniqueUsers: 0,
@@ -694,6 +708,39 @@ const Reports: React.FC = () => {
       u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleForceLogoutAll = async () => {
+    setForceLogoutLoading(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        toast.error('Você precisa estar autenticado');
+        return;
+      }
+
+      const response = await supabase.functions.invoke('force-logout-all', {
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      const result = response.data;
+      if (result.success) {
+        toast.success(`${result.logged_out_count} usuário(s) deslogado(s) com sucesso`);
+      } else {
+        toast.error(result.error || 'Erro ao forçar logout');
+      }
+    } catch (error) {
+      console.error('Error forcing logout:', error);
+      toast.error('Erro ao forçar logout de usuários');
+    } finally {
+      setForceLogoutLoading(false);
+    }
+  };
+
   // Wait for user data to be fully loaded before checking permissions
   if (!user || user.role === null) {
     return (
@@ -1143,9 +1190,51 @@ const Reports: React.FC = () => {
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold">Relatórios</h1>
-          <p className="text-muted-foreground">Métricas e análises do sistema</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Relatórios</h1>
+            <p className="text-muted-foreground">Métricas e análises do sistema</p>
+          </div>
+          
+          {hasFullAccess(user?.role) && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="destructive" 
+                  className="gap-2"
+                  disabled={forceLogoutLoading}
+                >
+                  {forceLogoutLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <LogOut className="w-4 h-4" />
+                  )}
+                  Forçar Logout de Todos
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-destructive" />
+                    Confirmar Logout Forçado
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação irá deslogar <strong>todos os usuários ativos</strong> do sistema imediatamente, 
+                    exceto você. As sessões de atividade serão encerradas e os usuários precisarão fazer login novamente.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={handleForceLogoutAll}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Confirmar Logout
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
 
         {/* Stats Cards */}
