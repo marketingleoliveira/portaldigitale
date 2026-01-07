@@ -26,6 +26,7 @@ import {
   PenSquare
 } from 'lucide-react';
 import SpreadsheetEditor from '@/components/SpreadsheetEditor';
+import SpreadsheetPreview from '@/components/SpreadsheetPreview';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -491,28 +492,15 @@ const Prices: React.FC = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Preview Dialog - Using Google Docs Viewer for readonly preview */}
-        <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-          <DialogContent className="max-w-6xl h-[85vh]">
-            <DialogHeader className="flex flex-row items-center justify-between">
-              <div>
-                <DialogTitle>Visualização: {selectedFile?.name}</DialogTitle>
-                <DialogDescription>
-                  Pré-visualização da planilha (somente leitura)
-                </DialogDescription>
-              </div>
-            </DialogHeader>
-            {previewUrl && (
-              <div className="flex-1 h-full min-h-0">
-                <iframe
-                  src={`https://docs.google.com/viewer?url=${encodeURIComponent(previewUrl)}&embedded=true`}
-                  className="w-full h-full min-h-[70vh] border rounded-lg"
-                  title="Visualização do arquivo"
-                />
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        {/* Spreadsheet Preview - Internal system */}
+        {selectedFile && previewUrl && (
+          <SpreadsheetPreview
+            open={isPreviewOpen}
+            onOpenChange={setIsPreviewOpen}
+            fileUrl={previewUrl}
+            fileName={selectedFile.name}
+          />
+        )}
 
         {/* Spreadsheet Editor for developers */}
         {selectedFile && (
