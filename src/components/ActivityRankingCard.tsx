@@ -3,19 +3,29 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Loader2, Trophy, Clock } from 'lucide-react';
+import { AppRole } from '@/types/auth';
 
 interface UserActivity {
   user_id: string;
   full_name: string;
   avatar_url: string | null;
   total_duration: number;
+  region?: string | null;
+}
+
+interface ProfileWithRole {
+  id: string;
+  full_name: string;
+  avatar_url: string | null;
+  region?: string | null;
+  role?: AppRole;
 }
 
 const ActivityRankingCard: React.FC = () => {
   const [ranking, setRanking] = useState<UserActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const sessionsRef = useRef<any[]>([]);
-  const profilesRef = useRef<any[]>([]);
+  const profilesRef = useRef<ProfileWithRole[]>([]);
   const onlineUsersRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -76,11 +86,14 @@ const ActivityRankingCard: React.FC = () => {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      const [profilesRes, sessionsRes, presenceRes] = await Promise.all([
+      const [profilesRes, rolesRes, sessionsRes, presenceRes] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, full_name, avatar_url')
+          .select('id, full_name, avatar_url, region')
           .eq('is_active', true),
+        supabase
+          .from('user_roles')
+          .select('user_id, role'),
         supabase
           .from('user_activity_sessions')
           .select('user_id, session_start, session_end, duration_seconds')
@@ -91,7 +104,26 @@ const ActivityRankingCard: React.FC = () => {
           .eq('is_online', true),
       ]);
 
-      if (profilesRes.data) profilesRef.current = profilesRes.data;
+      // Filter only vendedores (exclude admin, dev, gerente)
+      const vendedorUserIds = new Set(
+        (rolesRes.data || [])
+          .filter(r => r.role === 'vendedor')
+          .map(r => r.user_id)
+      );
+
+      // Create a map of user_id to role
+      const roleMap = new Map((rolesRes.data || []).map(r => [r.user_id, r.role]));
+
+      // Filter profiles to only include vendedores
+      if (profilesRes.data) {
+        profilesRef.current = profilesRes.data
+          .filter(p => vendedorUserIds.has(p.id))
+          .map(p => ({
+            ...p,
+            role: roleMap.get(p.id) as AppRole
+          }));
+      }
+      
       if (sessionsRes.data) sessionsRef.current = sessionsRes.data;
       if (presenceRes.data) {
         onlineUsersRef.current = new Set(presenceRes.data.map(p => p.user_id));

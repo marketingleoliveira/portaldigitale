@@ -213,7 +213,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       if (!response.ok) throw new Error('Erro ao carregar arquivo');
       
       const arrayBuffer = await response.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const workbook = XLSX.read(arrayBuffer, { type: 'array', cellStyles: true, cellFormula: true });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       
@@ -228,10 +228,54 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         const normalizedRow: CellData[] = [];
         for (let j = 0; j < maxCols; j++) {
           const value = String(row[j] ?? '');
+          const cellRef = XLSX.utils.encode_cell({ r: i, c: j });
+          const cell = worksheet[cellRef];
+          
+          // Extract formatting from original cell
+          let cellStyle: CellStyle | undefined = undefined;
+          if (cell?.s) {
+            const s = cell.s;
+            cellStyle = {};
+            
+            // Font styling
+            if (s.font?.bold) cellStyle.bold = true;
+            if (s.font?.italic) cellStyle.italic = true;
+            
+            // Alignment
+            if (s.alignment?.horizontal) {
+              cellStyle.align = s.alignment.horizontal as 'left' | 'center' | 'right';
+            }
+            
+            // Background color
+            if (s.fill?.fgColor?.rgb) {
+              cellStyle.backgroundColor = `#${s.fill.fgColor.rgb}`;
+            }
+            
+            // Text color
+            if (s.font?.color?.rgb) {
+              cellStyle.textColor = `#${s.font.color.rgb}`;
+            }
+            
+            // Borders
+            if (s.border) {
+              cellStyle.borders = {};
+              const borderColor = '#000000';
+              if (s.border.top) cellStyle.borders.top = { style: 'thin', color: borderColor };
+              if (s.border.right) cellStyle.borders.right = { style: 'thin', color: borderColor };
+              if (s.border.bottom) cellStyle.borders.bottom = { style: 'thin', color: borderColor };
+              if (s.border.left) cellStyle.borders.left = { style: 'thin', color: borderColor };
+            }
+          }
+          
+          // Default header row styling if no style detected
+          if (!cellStyle && i === 0) {
+            cellStyle = { bold: true, backgroundColor: '#f3f4f6' };
+          }
+          
           normalizedRow.push({
             value,
-            formula: value.startsWith('=') ? value : undefined,
-            style: i === 0 ? { bold: true, backgroundColor: '#f3f4f6' } : undefined
+            formula: cell?.f ? `=${cell.f}` : (value.startsWith('=') ? value : undefined),
+            style: cellStyle
           });
         }
         normalizedData.push(normalizedRow);

@@ -22,8 +22,8 @@ import {
   FileSpreadsheet, 
   Plus,
   Loader2,
-  Edit,
-  PenSquare
+  Settings,
+  TableProperties
 } from 'lucide-react';
 import SpreadsheetEditor from '@/components/SpreadsheetEditor';
 import SpreadsheetPreview from '@/components/SpreadsheetPreview';
@@ -597,10 +597,10 @@ const Prices: React.FC = () => {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleOpenEditor(file)}
-                                title="Editar planilha"
+                                title="Editar conteúdo da planilha"
                                 className="text-primary"
                               >
-                                <PenSquare className="w-4 h-4" />
+                                <TableProperties className="w-4 h-4" />
                               </Button>
                             )}
                             {canManage && (
@@ -609,9 +609,9 @@ const Prices: React.FC = () => {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => handleEdit(file)}
-                                  title="Editar informações"
+                                  title="Editar informações do arquivo"
                                 >
-                                  <Edit className="w-4 h-4" />
+                                  <Settings className="w-4 h-4" />
                                 </Button>
                                 <Button
                                   variant="ghost"
