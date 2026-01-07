@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { hasFullAccess } from '@/types/auth';
+import { hasFullAccess, hasAllRegionsAccess } from '@/types/auth';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,8 @@ import {
   Plus,
   Loader2,
   Edit,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -46,11 +47,14 @@ const Prices: React.FC = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const canManage = user?.role ? hasFullAccess(user.role) : false;
+  const isDev = user?.role === 'dev';
   
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [editorUrl, setEditorUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<PriceFile | null>(null);
   
   // Form state
@@ -59,6 +63,12 @@ const Prices: React.FC = () => {
   const [fileDescription, setFileDescription] = useState('');
   const [fileRegion, setFileRegion] = useState<string>('all');
   const [isUploading, setIsUploading] = useState(false);
+
+  // Check if user can see all regions (INTERNO, gerente, admin, dev)
+  const userRegion = user?.profile?.region;
+  const canSeeAllRegions = hasFullAccess(user?.role) || 
+                           user?.role === 'gerente' || 
+                           hasAllRegionsAccess(userRegion);
 
   // Fetch price files
   const { data: priceFiles = [], isLoading } = useQuery({
@@ -252,7 +262,16 @@ const Prices: React.FC = () => {
 
   const handlePreview = (file: PriceFile) => {
     setPreviewUrl(file.file_url);
+    setSelectedFile(file);
     setIsPreviewOpen(true);
+  };
+
+  const handleOpenEditor = (file: PriceFile) => {
+    // Use Google Docs editor for editing spreadsheets
+    const editUrl = `https://docs.google.com/spreadsheets/d/e/2PACX-${encodeURIComponent(file.file_url)}/edit`;
+    setEditorUrl(file.file_url);
+    setSelectedFile(file);
+    setIsEditorOpen(true);
   };
 
   const handleDownload = (file: PriceFile) => {
@@ -274,6 +293,11 @@ const Prices: React.FC = () => {
     return ext?.toUpperCase() || 'Arquivo';
   };
 
+  const getRegionLabel = (region: string | null) => {
+    if (!region) return 'Todas as regiões';
+    return region;
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -283,7 +307,9 @@ const Prices: React.FC = () => {
             <p className="text-muted-foreground">
               {canManage 
                 ? 'Gerencie as planilhas de preços por região' 
-                : 'Visualize e baixe as planilhas de preços da sua região'}
+                : canSeeAllRegions
+                  ? 'Visualize todas as planilhas de preços'
+                  : `Visualize as planilhas de preços da sua região (${userRegion || 'Todas'})`}
             </p>
           </div>
           
@@ -360,7 +386,7 @@ const Prices: React.FC = () => {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      Vendedores verão apenas planilhas da sua região
+                      Vendedores verão apenas planilhas da sua região. Vendedores Internos veem todas.
                     </p>
                   </div>
                 </div>
@@ -469,19 +495,58 @@ const Prices: React.FC = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Preview Dialog */}
+        {/* Preview Dialog - Using Google Docs Viewer for readonly preview */}
         <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-          <DialogContent className="max-w-5xl h-[80vh]">
-            <DialogHeader>
-              <DialogTitle>Visualização</DialogTitle>
+          <DialogContent className="max-w-6xl h-[85vh]">
+            <DialogHeader className="flex flex-row items-center justify-between">
+              <div>
+                <DialogTitle>Visualização: {selectedFile?.name}</DialogTitle>
+                <DialogDescription>
+                  Pré-visualização da planilha (somente leitura)
+                </DialogDescription>
+              </div>
             </DialogHeader>
             {previewUrl && (
               <div className="flex-1 h-full min-h-0">
                 <iframe
                   src={`https://docs.google.com/viewer?url=${encodeURIComponent(previewUrl)}&embedded=true`}
-                  className="w-full h-full min-h-[60vh] border rounded-lg"
+                  className="w-full h-full min-h-[70vh] border rounded-lg"
                   title="Visualização do arquivo"
                 />
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Editor Dialog - For developers to edit spreadsheets */}
+        <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
+          <DialogContent className="max-w-7xl h-[90vh]">
+            <DialogHeader className="flex flex-row items-center justify-between">
+              <div>
+                <DialogTitle>Editor: {selectedFile?.name}</DialogTitle>
+                <DialogDescription>
+                  Edite a planilha diretamente no portal
+                </DialogDescription>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => editorUrl && window.open(editorUrl, '_blank')}
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Abrir em nova aba
+              </Button>
+            </DialogHeader>
+            {editorUrl && (
+              <div className="flex-1 h-full min-h-0">
+                <iframe
+                  src={`https://docs.google.com/viewer?url=${encodeURIComponent(editorUrl)}&embedded=true`}
+                  className="w-full h-full min-h-[75vh] border rounded-lg"
+                  title="Editor do arquivo"
+                />
+                <p className="text-sm text-muted-foreground mt-2">
+                  💡 Para editar o arquivo, baixe-o, faça as alterações e substitua usando o botão "Editar" na tabela.
+                </p>
               </div>
             )}
           </DialogContent>
@@ -495,18 +560,20 @@ const Prices: React.FC = () => {
               Planilhas Disponíveis
             </CardTitle>
             <CardDescription>
-              {user?.role === 'vendedor' && user?.profile?.region
-                ? `Mostrando planilhas para a região ${user.profile.region}`
-                : 'Todas as planilhas disponíveis'}
+              {canSeeAllRegions
+                ? 'Todas as planilhas disponíveis'
+                : userRegion 
+                  ? `Mostrando planilhas para a região ${userRegion}`
+                  : 'Todas as planilhas disponíveis'}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
             ) : priceFiles.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
+              <div className="text-center py-8 text-muted-foreground">
                 <FileSpreadsheet className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p>Nenhuma planilha de preços disponível</p>
               </div>
@@ -517,8 +584,8 @@ const Prices: React.FC = () => {
                     <TableRow>
                       <TableHead>Nome</TableHead>
                       <TableHead>Descrição</TableHead>
-                      <TableHead>Região</TableHead>
                       <TableHead>Tipo</TableHead>
+                      <TableHead>Região</TableHead>
                       <TableHead>Tamanho</TableHead>
                       <TableHead>Atualizado</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
@@ -528,27 +595,25 @@ const Prices: React.FC = () => {
                     {priceFiles.map((file) => (
                       <TableRow key={file.id}>
                         <TableCell className="font-medium">{file.name}</TableCell>
-                        <TableCell className="max-w-xs truncate">
+                        <TableCell className="max-w-xs truncate text-muted-foreground">
                           {file.description || '-'}
                         </TableCell>
                         <TableCell>
-                          {file.region ? (
-                            <Badge variant="secondary">{file.region}</Badge>
-                          ) : (
-                            <Badge variant="outline">Todas</Badge>
-                          )}
+                          <Badge variant="outline">{getFileType(file.file_url)}</Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">
-                            {getFileType(file.file_url)}
+                          <Badge variant={file.region ? 'default' : 'secondary'}>
+                            {getRegionLabel(file.region)}
                           </Badge>
                         </TableCell>
-                        <TableCell>{formatFileSize(file.file_size)}</TableCell>
-                        <TableCell>
-                          {format(new Date(file.updated_at), "dd/MM/yyyy", { locale: ptBR })}
+                        <TableCell className="text-muted-foreground">
+                          {formatFileSize(file.file_size)}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {format(new Date(file.updated_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex justify-end gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
@@ -571,18 +636,14 @@ const Prices: React.FC = () => {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => handleEdit(file)}
-                                  title="Editar"
+                                  title="Editar informações"
                                 >
                                   <Edit className="w-4 h-4" />
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => {
-                                    if (confirm('Tem certeza que deseja excluir esta planilha?')) {
-                                      deleteMutation.mutate(file.id);
-                                    }
-                                  }}
+                                  onClick={() => deleteMutation.mutate(file.id)}
                                   title="Excluir"
                                   className="text-destructive hover:text-destructive"
                                 >
