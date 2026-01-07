@@ -77,8 +77,8 @@ const navItems: NavItem[] = [
     roles: ["dev", "admin", "gerente", "vendedor"],
     highlight: true,
   },
+  { label: "FAQ", href: "/ajuda", icon: HelpCircle, roles: ["dev", "admin", "gerente", "vendedor"] },
   { label: "Atualizações", href: "/atualizacoes", icon: Rocket, roles: ["dev", "admin", "gerente", "vendedor"] },
-  { label: "Ajuda", href: "/ajuda", icon: HelpCircle, roles: ["dev", "admin", "gerente", "vendedor"] },
 ];
 
 interface DashboardLayoutProps {
