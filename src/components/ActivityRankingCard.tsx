@@ -16,12 +16,13 @@ const ActivityRankingCard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const sessionsRef = useRef<any[]>([]);
   const profilesRef = useRef<any[]>([]);
+  const onlineUsersRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  // Real-time subscription for new sessions
+  // Real-time subscription for sessions and presence
   useEffect(() => {
     const channel = supabase
       .channel('activity-ranking-realtime')
@@ -34,6 +35,22 @@ const ActivityRankingCard: React.FC = () => {
         },
         (payload) => {
           sessionsRef.current = [...sessionsRef.current, payload.new];
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_presence',
+        },
+        (payload: any) => {
+          const newData = payload.new;
+          if (newData?.is_online) {
+            onlineUsersRef.current.add(newData.user_id);
+          } else if (newData?.user_id) {
+            onlineUsersRef.current.delete(newData.user_id);
+          }
         }
       )
       .subscribe();
@@ -59,7 +76,7 @@ const ActivityRankingCard: React.FC = () => {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      const [profilesRes, sessionsRes] = await Promise.all([
+      const [profilesRes, sessionsRes, presenceRes] = await Promise.all([
         supabase
           .from('profiles')
           .select('id, full_name, avatar_url')
@@ -68,10 +85,17 @@ const ActivityRankingCard: React.FC = () => {
           .from('user_activity_sessions')
           .select('user_id, session_start, session_end, duration_seconds')
           .gte('session_start', thirtyDaysAgo.toISOString()),
+        supabase
+          .from('user_presence')
+          .select('user_id, is_online')
+          .eq('is_online', true),
       ]);
 
       if (profilesRes.data) profilesRef.current = profilesRes.data;
       if (sessionsRes.data) sessionsRef.current = sessionsRes.data;
+      if (presenceRes.data) {
+        onlineUsersRef.current = new Set(presenceRes.data.map(p => p.user_id));
+      }
 
       calculateRanking();
     } catch (error) {
@@ -86,13 +110,19 @@ const ActivityRankingCard: React.FC = () => {
     const userDurations = new Map<string, number>();
 
     sessionsRef.current.forEach(session => {
-      const sessionStart = new Date(session.session_start).getTime();
       let duration: number;
 
       if (!session.session_end) {
-        // Active session
-        duration = Math.floor((now - sessionStart) / 1000);
+        // Active session - only count if user is ONLINE
+        if (onlineUsersRef.current.has(session.user_id)) {
+          const sessionStart = new Date(session.session_start).getTime();
+          duration = Math.floor((now - sessionStart) / 1000);
+        } else {
+          // User is offline, use stored duration_seconds
+          duration = session.duration_seconds || 0;
+        }
       } else {
+        // Completed session
         duration = session.duration_seconds || 0;
       }
 
