@@ -196,40 +196,58 @@ export const useUserPresence = () => {
     }, 1000);
 
     // Handle visibility change
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (document.hidden) {
-        updateSessionDuration();
-        updatePresence(false);
+        // User minimized or switched tabs - mark as offline immediately
+        await updateSessionDuration();
+        await updatePresence(false);
       } else {
+        // User came back - mark as online
         resetActivity();
-        updatePresence(true);
+        await updatePresence(true);
       }
     };
 
-    // Handle before unload
+    // Handle before unload - use synchronous approach for reliability
     const handleBeforeUnload = () => {
+      // Mark session as ended and user as offline using synchronous XHR
+      // This is more reliable than sendBeacon for Supabase REST API
       if (sessionIdRef.current && sessionStartRef.current) {
         const now = new Date();
         const durationSeconds = Math.floor((now.getTime() - sessionStartRef.current.getTime()) / 1000);
         
-        // Use sendBeacon for reliable unload - update session
-        const sessionUrl = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/user_activity_sessions?id=eq.${sessionIdRef.current}`;
-        const sessionData = JSON.stringify({
-          session_end: now.toISOString(),
-          duration_seconds: durationSeconds,
-        });
-        
-        navigator.sendBeacon(sessionUrl, new Blob([sessionData], { type: 'application/json' }));
+        // Synchronous XHR for session update
+        const sessionXhr = new XMLHttpRequest();
+        sessionXhr.open('PATCH', `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/user_activity_sessions?id=eq.${sessionIdRef.current}`, false);
+        sessionXhr.setRequestHeader('Content-Type', 'application/json');
+        sessionXhr.setRequestHeader('apikey', import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY);
+        sessionXhr.setRequestHeader('Authorization', `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`);
+        sessionXhr.setRequestHeader('Prefer', 'return=minimal');
+        try {
+          sessionXhr.send(JSON.stringify({
+            session_end: now.toISOString(),
+            duration_seconds: durationSeconds,
+          }));
+        } catch (e) {
+          console.error('Error updating session on unload:', e);
+        }
       }
       
-      // Update presence
-      const presenceUrl = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/user_presence?user_id=eq.${user.id}`;
-      const presenceData = JSON.stringify({
-        is_online: false,
-        last_seen: new Date().toISOString(),
-      });
-      
-      navigator.sendBeacon(presenceUrl, new Blob([presenceData], { type: 'application/json' }));
+      // Synchronous XHR for presence update
+      const presenceXhr = new XMLHttpRequest();
+      presenceXhr.open('PATCH', `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/user_presence?user_id=eq.${user.id}`, false);
+      presenceXhr.setRequestHeader('Content-Type', 'application/json');
+      presenceXhr.setRequestHeader('apikey', import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY);
+      presenceXhr.setRequestHeader('Authorization', `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`);
+      presenceXhr.setRequestHeader('Prefer', 'return=minimal');
+      try {
+        presenceXhr.send(JSON.stringify({
+          is_online: false,
+          last_seen: new Date().toISOString(),
+        }));
+      } catch (e) {
+        console.error('Error updating presence on unload:', e);
+      }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
