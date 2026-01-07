@@ -22,6 +22,11 @@ interface UserProfile {
   avatar_url: string | null;
 }
 
+interface PresenceData {
+  user_id: string;
+  is_online: boolean;
+}
+
 interface Session {
   id: string;
   user_id: string;
@@ -55,6 +60,7 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
   const { isUserOnline, onlineCount } = useOnlineUsers();
   const sessionsRef = useRef<Session[]>([]);
   const profilesRef = useRef<UserProfile[]>([]);
+  const onlineUsersRef = useRef<Set<string>>(new Set());
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -70,7 +76,7 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
     fetchInitialData();
   }, []);
 
-  // Real-time subscription for session changes (only INSERT and DELETE)
+  // Real-time subscription for session changes and presence
   useEffect(() => {
     const channel = supabase
       .channel('activity-sessions-realtime')
@@ -94,6 +100,22 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
         },
         (payload) => {
           setSessions(prev => prev.filter(s => s.id !== (payload.old as Session).id));
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_presence',
+        },
+        (payload: any) => {
+          const newData = payload.new;
+          if (newData?.is_online) {
+            onlineUsersRef.current.add(newData.user_id);
+          } else if (newData?.user_id) {
+            onlineUsersRef.current.delete(newData.user_id);
+          }
         }
       )
       .subscribe();
@@ -158,8 +180,17 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
 
       if (sessionsError) throw sessionsError;
 
+      // Fetch online users
+      const { data: presenceData } = await supabase
+        .from('user_presence')
+        .select('user_id, is_online')
+        .eq('is_online', true);
+
       setProfiles(profilesData || []);
       setSessions(sessionsData || []);
+      if (presenceData) {
+        onlineUsersRef.current = new Set(presenceData.map(p => p.user_id));
+      }
       
       // Initial calculation
       if (profilesData && profilesData.length > 0) {
@@ -183,11 +214,16 @@ const UserActivityReport: React.FC<UserActivityReportProps> = ({ onClose }) => {
     sessionsData.forEach(session => {
       const sessionStart = new Date(session.session_start).getTime();
       
-      // Calculate duration - for active sessions, calculate from session_start to now
+      // Calculate duration - for active sessions, only count if user is ONLINE
       let duration: number;
       if (!session.session_end) {
-        // Active session - calculate real-time duration
-        duration = Math.floor((now - sessionStart) / 1000);
+        // Active session - only count real-time if user is ONLINE
+        if (onlineUsersRef.current.has(session.user_id)) {
+          duration = Math.floor((now - sessionStart) / 1000);
+        } else {
+          // User is offline, use stored duration_seconds
+          duration = session.duration_seconds || 0;
+        }
       } else {
         // Completed session - use stored duration or calculate from timestamps
         duration = session.duration_seconds || Math.floor((new Date(session.session_end).getTime() - sessionStart) / 1000);
