@@ -3,15 +3,24 @@ import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Save, Download, Loader2, Plus, Trash2, Bold, Italic, AlignLeft, AlignCenter, AlignRight, Undo, Redo, FileText, Type, Palette } from 'lucide-react';
+import { Save, Download, Loader2, Plus, Trash2, Bold, Italic, AlignLeft, AlignCenter, AlignRight, Undo, Redo, FileText, Type, Palette, Square, Minus, Grid3X3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+type BorderStyle = 'none' | 'thin' | 'medium' | 'thick' | 'double';
+
+interface CellBorders {
+  top?: { style: BorderStyle; color: string };
+  right?: { style: BorderStyle; color: string };
+  bottom?: { style: BorderStyle; color: string };
+  left?: { style: BorderStyle; color: string };
+}
 
 interface CellStyle {
   bold?: boolean;
@@ -19,6 +28,8 @@ interface CellStyle {
   align?: 'left' | 'center' | 'right';
   backgroundColor?: string;
   textColor?: string;
+  borders?: CellBorders;
+  fontSize?: number;
 }
 
 interface CellData {
@@ -535,6 +546,25 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     return rowIndex >= minRow && rowIndex <= maxRow && colIndex >= minCol && colIndex <= maxCol;
   };
 
+  const getBorderStyle = (border?: { style: BorderStyle; color: string }): string => {
+    if (!border || border.style === 'none') return '';
+    const widthMap: Record<BorderStyle, string> = {
+      none: '0px',
+      thin: '1px',
+      medium: '2px',
+      thick: '3px',
+      double: '3px'
+    };
+    const styleMap: Record<BorderStyle, string> = {
+      none: 'none',
+      thin: 'solid',
+      medium: 'solid',
+      thick: 'solid',
+      double: 'double'
+    };
+    return `${widthMap[border.style]} ${styleMap[border.style]} ${border.color}`;
+  };
+
   const getCellStyle = (cell: CellData): React.CSSProperties => {
     const style: React.CSSProperties = {};
     if (cell.style?.bold) style.fontWeight = 'bold';
@@ -542,8 +572,95 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     if (cell.style?.align) style.textAlign = cell.style.align;
     if (cell.style?.backgroundColor) style.backgroundColor = cell.style.backgroundColor;
     if (cell.style?.textColor) style.color = cell.style.textColor;
+    if (cell.style?.fontSize) style.fontSize = `${cell.style.fontSize}px`;
+    
+    // Apply borders
+    if (cell.style?.borders) {
+      if (cell.style.borders.top) style.borderTop = getBorderStyle(cell.style.borders.top);
+      if (cell.style.borders.right) style.borderRight = getBorderStyle(cell.style.borders.right);
+      if (cell.style.borders.bottom) style.borderBottom = getBorderStyle(cell.style.borders.bottom);
+      if (cell.style.borders.left) style.borderLeft = getBorderStyle(cell.style.borders.left);
+    }
+    
     return style;
   };
+
+  const applyBorder = (borderType: 'all' | 'outer' | 'inner' | 'top' | 'right' | 'bottom' | 'left' | 'none', borderStyle: BorderStyle = 'thin', borderColor: string = '#000000') => {
+    if (!selectedCell && !selectedRange) return;
+    
+    setData(prev => {
+      const newData = prev.map(row => row.map(cell => ({ ...cell })));
+      
+      const startRow = selectedRange?.startRow ?? selectedCell!.row;
+      const endRow = selectedRange?.endRow ?? selectedCell!.row;
+      const startCol = selectedRange?.startCol ?? selectedCell!.col;
+      const endCol = selectedRange?.endCol ?? selectedCell!.col;
+      
+      const minRow = Math.min(startRow, endRow);
+      const maxRow = Math.max(startRow, endRow);
+      const minCol = Math.min(startCol, endCol);
+      const maxCol = Math.max(startCol, endCol);
+      
+      for (let r = minRow; r <= maxRow; r++) {
+        for (let c = minCol; c <= maxCol; c++) {
+          const borders: CellBorders = { ...newData[r][c].style?.borders };
+          const border = { style: borderStyle, color: borderColor };
+          const noBorder = { style: 'none' as BorderStyle, color: borderColor };
+          
+          switch (borderType) {
+            case 'all':
+              borders.top = border;
+              borders.right = border;
+              borders.bottom = border;
+              borders.left = border;
+              break;
+            case 'outer':
+              if (r === minRow) borders.top = border;
+              if (r === maxRow) borders.bottom = border;
+              if (c === minCol) borders.left = border;
+              if (c === maxCol) borders.right = border;
+              break;
+            case 'inner':
+              if (r > minRow) borders.top = border;
+              if (r < maxRow) borders.bottom = border;
+              if (c > minCol) borders.left = border;
+              if (c < maxCol) borders.right = border;
+              break;
+            case 'top':
+              borders.top = border;
+              break;
+            case 'right':
+              borders.right = border;
+              break;
+            case 'bottom':
+              borders.bottom = border;
+              break;
+            case 'left':
+              borders.left = border;
+              break;
+            case 'none':
+              borders.top = noBorder;
+              borders.right = noBorder;
+              borders.bottom = noBorder;
+              borders.left = noBorder;
+              break;
+          }
+          
+          newData[r][c] = {
+            ...newData[r][c],
+            style: { ...newData[r][c].style, borders }
+          };
+        }
+      }
+      
+      saveToHistory(newData);
+      return newData;
+    });
+    setHasChanges(true);
+  };
+
+  const [currentBorderColor, setCurrentBorderColor] = useState('#000000');
+  const [currentBorderStyle, setCurrentBorderStyle] = useState<BorderStyle>('thin');
 
   const currentCellStyle = selectedCell ? data[selectedCell.row]?.[selectedCell.col]?.style : undefined;
 
@@ -732,6 +849,112 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => applyStyle({ textColor: '#9333ea' })}>
                     <span className="text-purple-600 mr-2">A</span> Roxo
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            
+            <Separator orientation="vertical" className="h-6" />
+            
+            {/* Borders */}
+            <div className="flex items-center gap-1">
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Grid3X3 className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>Bordas</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent className="w-56 bg-popover">
+                  <DropdownMenuLabel>Tipo de Borda</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => applyBorder('all', currentBorderStyle, currentBorderColor)}>
+                    <div className="w-5 h-5 border-2 border-current mr-2" /> Todas as Bordas
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => applyBorder('outer', currentBorderStyle, currentBorderColor)}>
+                    <div className="w-5 h-5 border-2 border-current mr-2 flex items-center justify-center">
+                      <div className="w-3 h-3" />
+                    </div> Borda Externa
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => applyBorder('inner', currentBorderStyle, currentBorderColor)}>
+                    <div className="w-5 h-5 border border-transparent mr-2 flex items-center justify-center">
+                      <div className="w-full h-0.5 bg-current absolute" />
+                      <div className="h-full w-0.5 bg-current absolute" />
+                    </div> Bordas Internas
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => applyBorder('top', currentBorderStyle, currentBorderColor)}>
+                    <div className="w-5 h-5 border-t-2 border-current mr-2" /> Borda Superior
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => applyBorder('bottom', currentBorderStyle, currentBorderColor)}>
+                    <div className="w-5 h-5 border-b-2 border-current mr-2" /> Borda Inferior
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => applyBorder('left', currentBorderStyle, currentBorderColor)}>
+                    <div className="w-5 h-5 border-l-2 border-current mr-2" /> Borda Esquerda
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => applyBorder('right', currentBorderStyle, currentBorderColor)}>
+                    <div className="w-5 h-5 border-r-2 border-current mr-2" /> Borda Direita
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => applyBorder('none')}>
+                    <div className="w-5 h-5 border border-dashed border-muted-foreground/50 mr-2" /> Sem Bordas
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Minus className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>Estilo da Borda</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent className="bg-popover">
+                  <DropdownMenuLabel>Espessura</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => setCurrentBorderStyle('thin')}>
+                    <div className="w-8 h-0 border-t border-current mr-2" /> Fina
+                    {currentBorderStyle === 'thin' && <span className="ml-auto">✓</span>}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setCurrentBorderStyle('medium')}>
+                    <div className="w-8 h-0 border-t-2 border-current mr-2" /> Média
+                    {currentBorderStyle === 'medium' && <span className="ml-auto">✓</span>}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setCurrentBorderStyle('thick')}>
+                    <div className="w-8 h-0 border-t-[3px] border-current mr-2" /> Grossa
+                    {currentBorderStyle === 'thick' && <span className="ml-auto">✓</span>}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setCurrentBorderStyle('double')}>
+                    <div className="w-8 border-t-[3px] border-double border-current mr-2" /> Dupla
+                    {currentBorderStyle === 'double' && <span className="ml-auto">✓</span>}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Cor da Borda</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => setCurrentBorderColor('#000000')}>
+                    <div className="w-4 h-4 bg-black mr-2 rounded" /> Preto
+                    {currentBorderColor === '#000000' && <span className="ml-auto">✓</span>}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setCurrentBorderColor('#6b7280')}>
+                    <div className="w-4 h-4 bg-gray-500 mr-2 rounded" /> Cinza
+                    {currentBorderColor === '#6b7280' && <span className="ml-auto">✓</span>}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setCurrentBorderColor('#dc2626')}>
+                    <div className="w-4 h-4 bg-red-600 mr-2 rounded" /> Vermelho
+                    {currentBorderColor === '#dc2626' && <span className="ml-auto">✓</span>}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setCurrentBorderColor('#2563eb')}>
+                    <div className="w-4 h-4 bg-blue-600 mr-2 rounded" /> Azul
+                    {currentBorderColor === '#2563eb' && <span className="ml-auto">✓</span>}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setCurrentBorderColor('#16a34a')}>
+                    <div className="w-4 h-4 bg-green-600 mr-2 rounded" /> Verde
+                    {currentBorderColor === '#16a34a' && <span className="ml-auto">✓</span>}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
