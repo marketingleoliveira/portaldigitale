@@ -131,6 +131,7 @@ export const isManagerOrAbove = (role: AppRole | null | undefined): boolean => {
 
 // Brazilian states/regions for vendedor subcargo
 export const REGIONS = [
+  { value: 'INTERNO', label: 'Vendedor Interno', isSpecial: true },
   { value: 'AC', label: 'Acre' },
   { value: 'AL', label: 'Alagoas' },
   { value: 'AP', label: 'Amapá' },
@@ -161,3 +162,8 @@ export const REGIONS = [
 ] as const;
 
 export type Region = typeof REGIONS[number]['value'];
+
+// Helper to check if a region has access to all regions (Vendedor Interno)
+export const hasAllRegionsAccess = (region: string | null | undefined): boolean => {
+  return region === 'INTERNO';
+};
