@@ -23,9 +23,9 @@ import {
   Plus,
   Loader2,
   Edit,
-  X,
-  ExternalLink
+  PenSquare
 } from 'lucide-react';
+import SpreadsheetEditor from '@/components/SpreadsheetEditor';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -54,7 +54,6 @@ const Prices: React.FC = () => {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [editorUrl, setEditorUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<PriceFile | null>(null);
   
   // Form state
@@ -267,9 +266,6 @@ const Prices: React.FC = () => {
   };
 
   const handleOpenEditor = (file: PriceFile) => {
-    // Use Google Docs editor for editing spreadsheets
-    const editUrl = `https://docs.google.com/spreadsheets/d/e/2PACX-${encodeURIComponent(file.file_url)}/edit`;
-    setEditorUrl(file.file_url);
     setSelectedFile(file);
     setIsEditorOpen(true);
   };
@@ -518,39 +514,17 @@ const Prices: React.FC = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Editor Dialog - For developers to edit spreadsheets */}
-        <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
-          <DialogContent className="max-w-7xl h-[90vh]">
-            <DialogHeader className="flex flex-row items-center justify-between">
-              <div>
-                <DialogTitle>Editor: {selectedFile?.name}</DialogTitle>
-                <DialogDescription>
-                  Edite a planilha diretamente no portal
-                </DialogDescription>
-              </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => editorUrl && window.open(editorUrl, '_blank')}
-              >
-                <ExternalLink className="w-4 h-4 mr-2" />
-                Abrir em nova aba
-              </Button>
-            </DialogHeader>
-            {editorUrl && (
-              <div className="flex-1 h-full min-h-0">
-                <iframe
-                  src={`https://docs.google.com/viewer?url=${encodeURIComponent(editorUrl)}&embedded=true`}
-                  className="w-full h-full min-h-[75vh] border rounded-lg"
-                  title="Editor do arquivo"
-                />
-                <p className="text-sm text-muted-foreground mt-2">
-                  💡 Para editar o arquivo, baixe-o, faça as alterações e substitua usando o botão "Editar" na tabela.
-                </p>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        {/* Spreadsheet Editor for developers */}
+        {selectedFile && (
+          <SpreadsheetEditor
+            open={isEditorOpen}
+            onOpenChange={setIsEditorOpen}
+            fileUrl={selectedFile.file_url}
+            fileName={selectedFile.name}
+            fileId={selectedFile.id}
+            onSave={() => queryClient.invalidateQueries({ queryKey: ['price-files'] })}
+          />
+        )}
 
         {/* Price Files Table */}
         <Card>
@@ -630,6 +604,17 @@ const Prices: React.FC = () => {
                             >
                               <Download className="w-4 h-4" />
                             </Button>
+                            {isDev && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleOpenEditor(file)}
+                                title="Editar planilha"
+                                className="text-primary"
+                              >
+                                <PenSquare className="w-4 h-4" />
+                              </Button>
+                            )}
                             {canManage && (
                               <>
                                 <Button
