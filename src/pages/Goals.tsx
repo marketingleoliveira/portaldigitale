@@ -534,9 +534,12 @@ const Goals: React.FC = () => {
     return { totalGoals, achievedGoals, inProgressGoals };
   }, [goals, progress]);
 
-  // Calculate seller ranking - somente vendedores aparecem no ranking
+  // Calculate seller ranking - baseado APENAS em metas de EQUIPE
   const sellerRanking = useMemo((): SellerRanking[] => {
-    if (goals.length === 0 || users.length === 0) return [];
+    // Filtrar apenas metas de equipe (team)
+    const teamGoalsOnly = goals.filter(g => g.goal_type === 'team');
+    
+    if (teamGoalsOnly.length === 0 || users.length === 0) return [];
 
     // Filtrar apenas usuários com role 'vendedor'
     const vendedores = users.filter(u => u.role === 'vendedor');
@@ -546,7 +549,8 @@ const Goals: React.FC = () => {
       let totalTargets = 0;
       let goalsAchieved = 0;
 
-      goals.forEach(goal => {
+      // Iterar apenas sobre metas de equipe
+      teamGoalsOnly.forEach(goal => {
         const { start } = getPeriodDates(goal.period_type);
         const periodStart = format(start, 'yyyy-MM-dd');
         
@@ -578,10 +582,11 @@ const Goals: React.FC = () => {
       };
     });
 
-    // Sort by percentage descending
+    // Sort by total contribution (totalProgress) descending - quem mais contribuiu primeiro
     return rankings
-      .filter(r => r.totalProgress > 0 || r.goalsAchieved > 0)
-      .sort((a, b) => b.percentage - a.percentage);
+      .filter(r => r.totalProgress > 0)
+      .sort((a, b) => b.totalProgress - a.totalProgress)
+      .slice(0, 10); // Top 10
   }, [goals, progress, users]);
 
   if (loading) {
@@ -1018,7 +1023,7 @@ const Goals: React.FC = () => {
                   Ranking de Vendedores
                 </CardTitle>
                 <CardDescription>
-                  Classificação baseada no progresso das metas
+                  Classificação baseada na contribuição para metas de equipe
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1031,7 +1036,7 @@ const Goals: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {sellerRanking.slice(0, 15).map((seller, index) => {
+                    {sellerRanking.map((seller, index) => {
                       const isFirst = index === 0;
                       const isSecond = index === 1;
                       const isThird = index === 2;
@@ -1126,7 +1131,7 @@ const Goals: React.FC = () => {
                               {seller.percentage}%
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {seller.goalsAchieved}/{goals.length}
+                              {seller.goalsAchieved} meta{seller.goalsAchieved !== 1 ? 's' : ''} batida{seller.goalsAchieved !== 1 ? 's' : ''}
                             </p>
                           </div>
                         </div>
