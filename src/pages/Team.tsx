@@ -16,6 +16,7 @@ interface TeamMember {
   avatar_url: string | null;
   is_active: boolean;
   role?: AppRole;
+  region?: string | null;
 }
 
 const Team: React.FC = () => {
@@ -51,6 +52,7 @@ const Team: React.FC = () => {
           avatar_url: profile.avatar_url,
           is_active: profile.is_active,
           role: userRole?.role as AppRole | undefined,
+          region: profile.region,
         };
       });
 
@@ -106,7 +108,7 @@ const Team: React.FC = () => {
           <p className="text-muted-foreground text-sm line-clamp-1 mb-2">
             {member.email}
           </p>
-          {member.role && <RoleBadge role={member.role} size="sm" />}
+          {member.role && <RoleBadge role={member.role} region={member.region} size="sm" />}
         </CardContent>
       </Card>
     );
