@@ -241,10 +241,7 @@ const Dashboard: React.FC = () => {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {hasFullAccess(user?.role) && (
-            <>
-              <OnlineUsersCard />
-              <ActivityRankingCard />
-            </>
+            <OnlineUsersCard />
           )}
           {filteredStats.map((stat) => {
             const Icon = stat.icon;
@@ -378,65 +375,10 @@ const Dashboard: React.FC = () => {
           </Card>
         </div>
 
-        {/* Role Info & Recent Activity */}
+        {/* Activity Ranking & Links */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Role Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-primary" />
-                Seu Nível de Acesso
-              </CardTitle>
-              <CardDescription>
-                Informações sobre suas permissões
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {user?.role && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <RoleBadge role={user.role} />
-                  </div>
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    {user.role === 'dev' && (
-                      <>
-                        <p>✓ Acesso total ao sistema</p>
-                        <p>✓ Controle de desenvolvimento</p>
-                        <p>✓ Gerenciamento de usuários</p>
-                        <p>✓ Todas as funcionalidades</p>
-                        <p>✓ Suporte técnico</p>
-                      </>
-                    )}
-                    {user.role === 'admin' && (
-                      <>
-                        <p>✓ Acesso total ao sistema</p>
-                        <p>✓ Gerenciamento de usuários</p>
-                        <p>✓ Cadastro e edição de produtos</p>
-                        <p>✓ Visualização de relatórios</p>
-                        <p>✓ Controle de permissões</p>
-                      </>
-                    )}
-                    {user.role === 'gerente' && (
-                      <>
-                        <p>✓ Acesso a dados essenciais</p>
-                        <p>✓ Edição de produtos</p>
-                        <p>✓ Relatórios da equipe</p>
-                        <p>✓ Gestão de vendedores</p>
-                      </>
-                    )}
-                    {user.role === 'vendedor' && (
-                      <>
-                        <p>✓ Catálogo de produtos</p>
-                        <p>✓ Materiais comerciais</p>
-                        <p>✓ Visualização da equipe</p>
-                        <p>✓ Abertura de tickets</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Activity Ranking - visible to all users with role */}
+          {user?.role && <ActivityRankingCard />}
 
           {/* Links Rápidos */}
           <Card>
