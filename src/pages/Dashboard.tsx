@@ -94,11 +94,11 @@ const Dashboard: React.FC = () => {
           logsCount = logs || 0;
         }
 
-        // Fetch links from LINKS category
+        // Fetch links from Links de Acesso category
         const { data: linksData } = await supabase
           .from('files')
           .select('id, name, file_url, description')
-          .eq('category', 'LINKS')
+          .eq('category', 'Links de Acesso')
           .eq('is_external_link', true)
           .order('name', { ascending: true });
 
