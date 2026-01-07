@@ -71,7 +71,7 @@ const navItems: NavItem[] = [
   { label: "Materiais Comerciais", href: "/downloads", icon: FileText, roles: ["dev", "admin", "gerente", "vendedor"] },
   { label: "Notificações", href: "/notificacoes", icon: Bell, roles: ["dev", "admin", "gerente", "vendedor"] },
   {
-    label: "Tickets",
+    label: "Solicitar Ajuda",
     href: "/tickets",
     icon: TicketIcon,
     roles: ["dev", "admin", "gerente", "vendedor"],
