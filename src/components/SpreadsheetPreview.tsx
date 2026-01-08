@@ -57,119 +57,179 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
     }
   }, [open, fileUrl]);
 
-  const rgbaToHex = (color: { rgb?: string; theme?: number; tint?: number } | undefined): string | undefined => {
+  const parseColor = (color: any): string | undefined => {
     if (!color) return undefined;
+    
+    // Handle ARGB format (8 chars - first 2 are alpha)
+    if (color.argb) {
+      const argb = color.argb;
+      return `#${argb.substring(2)}`; // Remove alpha
+    }
+    
+    // Handle RGB format
     if (color.rgb) {
-      // ARGB format - remove alpha if present
       const rgb = color.rgb.length === 8 ? color.rgb.substring(2) : color.rgb;
       return `#${rgb}`;
     }
+    
+    // Handle theme colors with tint
+    if (color.theme !== undefined) {
+      // Default theme colors mapping (approximate)
+      const themeColors = [
+        '#FFFFFF', '#000000', '#E7E6E6', '#44546A',
+        '#4472C4', '#ED7D31', '#A5A5A5', '#FFC000',
+        '#5B9BD5', '#70AD47'
+      ];
+      const baseColor = themeColors[color.theme] || '#000000';
+      return baseColor;
+    }
+    
+    // Handle indexed colors
+    if (color.indexed !== undefined) {
+      const indexedColors = [
+        '#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00',
+        '#FF00FF', '#00FFFF', '#000000', '#FFFFFF', '#FF0000', '#00FF00',
+        '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#800000', '#008000',
+        '#000080', '#808000', '#800080', '#008080', '#C0C0C0', '#808080',
+        '#9999FF', '#993366', '#FFFFCC', '#CCFFFF', '#660066', '#FF8080',
+        '#0066CC', '#CCCCFF', '#000080', '#FF00FF', '#FFFF00', '#00FFFF',
+        '#800080', '#800000', '#008080', '#0000FF', '#00CCFF', '#CCFFFF',
+        '#CCFFCC', '#FFFF99', '#99CCFF', '#FF99CC', '#CC99FF', '#FFCC99',
+        '#3366FF', '#33CCCC', '#99CC00', '#FFCC00', '#FF9900', '#FF6600',
+        '#666699', '#969696', '#003366', '#339966', '#003300', '#333300',
+        '#993300', '#993366', '#333399', '#333333'
+      ];
+      return indexedColors[color.indexed] || '#000000';
+    }
+    
     return undefined;
   };
 
-  const extractCellStyle = (cell: XLSX.CellObject | undefined): CellStyle => {
+  const extractCellStyle = (cell: any): CellStyle => {
     const style: CellStyle = {};
     
-    if (!cell || !cell.s) return style;
+    if (!cell?.s) return style;
     
-    const cellStyle = cell.s as any;
+    const s = cell.s;
     
     // Font styles
-    if (cellStyle.font) {
-      if (cellStyle.font.bold) style.bold = true;
-      if (cellStyle.font.italic) style.italic = true;
-      if (cellStyle.font.color) {
-        style.textColor = rgbaToHex(cellStyle.font.color);
+    if (s.font) {
+      if (s.font.bold) style.bold = true;
+      if (s.font.italic) style.italic = true;
+      if (s.font.color) {
+        const color = parseColor(s.font.color);
+        if (color && color !== '#000000') style.textColor = color;
       }
-      if (cellStyle.font.sz) {
-        style.fontSize = cellStyle.font.sz;
-      }
+      if (s.font.sz) style.fontSize = s.font.sz;
     }
     
     // Alignment
-    if (cellStyle.alignment) {
-      if (cellStyle.alignment.horizontal === 'center') style.textAlign = 'center';
-      else if (cellStyle.alignment.horizontal === 'right') style.textAlign = 'right';
-      else style.textAlign = 'left';
+    if (s.alignment?.horizontal) {
+      style.textAlign = s.alignment.horizontal as 'left' | 'center' | 'right';
     }
     
-    // Background color
-    if (cellStyle.fill) {
-      if (cellStyle.fill.fgColor) {
-        style.backgroundColor = rgbaToHex(cellStyle.fill.fgColor);
-      } else if (cellStyle.fill.bgColor) {
-        style.backgroundColor = rgbaToHex(cellStyle.fill.bgColor);
+    // Fill/Background
+    if (s.fill) {
+      if (s.fill.fgColor) {
+        const bgColor = parseColor(s.fill.fgColor);
+        if (bgColor && bgColor !== '#FFFFFF' && bgColor !== '#000000') {
+          style.backgroundColor = bgColor;
+        }
+      }
+      if (s.fill.bgColor && !style.backgroundColor) {
+        const bgColor = parseColor(s.fill.bgColor);
+        if (bgColor && bgColor !== '#FFFFFF') {
+          style.backgroundColor = bgColor;
+        }
       }
     }
     
     // Borders
-    if (cellStyle.border) {
-      const borderToStyle = (border: any): string | undefined => {
-        if (!border) return undefined;
-        const color = border.color ? rgbaToHex(border.color) || '#000000' : '#000000';
-        const styleMap: Record<string, string> = {
-          'thin': `1px solid ${color}`,
-          'medium': `2px solid ${color}`,
-          'thick': `3px solid ${color}`,
-          'double': `3px double ${color}`,
-          'dotted': `1px dotted ${color}`,
-          'dashed': `1px dashed ${color}`,
+    if (s.border) {
+      const getBorderStyle = (border: any): string | undefined => {
+        if (!border || !border.style) return undefined;
+        const color = parseColor(border.color) || '#000000';
+        const styles: Record<string, string> = {
+          thin: `1px solid ${color}`,
+          medium: `2px solid ${color}`,
+          thick: `3px solid ${color}`,
+          double: `3px double ${color}`,
+          dotted: `1px dotted ${color}`,
+          dashed: `1px dashed ${color}`,
+          hair: `1px solid ${color}`,
         };
-        return styleMap[border.style] || `1px solid ${color}`;
+        return styles[border.style] || `1px solid ${color}`;
       };
       
-      style.borderTop = borderToStyle(cellStyle.border.top);
-      style.borderBottom = borderToStyle(cellStyle.border.bottom);
-      style.borderLeft = borderToStyle(cellStyle.border.left);
-      style.borderRight = borderToStyle(cellStyle.border.right);
+      style.borderTop = getBorderStyle(s.border.top);
+      style.borderBottom = getBorderStyle(s.border.bottom);
+      style.borderLeft = getBorderStyle(s.border.left);
+      style.borderRight = getBorderStyle(s.border.right);
     }
     
     return style;
   };
 
-  const formatCellValue = (cell: XLSX.CellObject | undefined): string => {
+  const formatCellValue = (cell: any): string => {
     if (!cell) return '';
     
-    // If there's a formatted text, use it
-    if (cell.w !== undefined) {
+    // Use the formatted value if available (preserves currency, date, percentage formatting)
+    if (cell.w !== undefined && cell.w !== null) {
       return cell.w;
     }
     
-    // Handle different cell types
+    // Handle numbers with format
     if (cell.t === 'n' && cell.v !== undefined) {
-      // Number - check for format
       const numValue = cell.v as number;
-      const format = (cell as any).z;
+      const format = cell.z;
       
+      // Try to detect format from pattern
       if (format) {
-        // Currency formats
-        if (format.includes('R$') || format.includes('$')) {
+        const formatLower = format.toLowerCase();
+        
+        // Currency patterns
+        if (formatLower.includes('r$') || formatLower.includes('"r$"')) {
           return numValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         }
+        if (formatLower.includes('$') || formatLower.includes('usd')) {
+          return numValue.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+        }
+        if (formatLower.includes('€') || formatLower.includes('eur')) {
+          return numValue.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+        }
+        
         // Percentage
         if (format.includes('%')) {
-          return (numValue * 100).toFixed(2) + '%';
+          return (numValue * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
         }
-        // General number with thousands separator
-        if (format.includes(',') || format.includes('#')) {
-          return numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        
+        // Accounting format (negative in parentheses)
+        if (format.includes('(') && format.includes(')')) {
+          if (numValue < 0) {
+            return `(${Math.abs(numValue).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
+          }
+        }
+        
+        // Number with decimals
+        if (format.includes('.') || format.includes(',')) {
+          const decimals = (format.match(/0+$/)?.[0] || '').length || 2;
+          return numValue.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
         }
       }
       
-      // Default number formatting
+      // Default formatting for numbers
       if (Number.isInteger(numValue)) {
         return numValue.toLocaleString('pt-BR');
       }
       return numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     
-    if (cell.t === 'd' && cell.v !== undefined) {
-      // Date
-      const date = new Date(cell.v as string);
+    // Date
+    if (cell.t === 'd') {
+      const date = new Date(cell.v);
       return date.toLocaleDateString('pt-BR');
     }
     
-    // String or other
     return String(cell.v ?? '');
   };
 
@@ -186,7 +246,9 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
         type: 'array',
         cellStyles: true,
         cellNF: true,
-        cellDates: true
+        cellDates: true,
+        cellFormula: true,
+        raw: false
       });
       
       const sheetsData: SheetData[] = workbook.SheetNames.map(sheetName => {
@@ -199,7 +261,7 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
           const rowData: CellData[] = [];
           for (let col = range.s.c; col <= range.e.c; col++) {
             const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-            const cell = worksheet[cellAddress] as XLSX.CellObject | undefined;
+            const cell = worksheet[cellAddress];
             
             const value = cell?.v !== undefined ? String(cell.v) : '';
             const formattedValue = formatCellValue(cell);
@@ -361,17 +423,19 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] w-full max-h-[90vh] h-full flex flex-col">
-        <DialogHeader className="flex flex-row items-center justify-between">
-          <div>
-            <DialogTitle>Visualização: {fileName}</DialogTitle>
-            <DialogDescription>
-              Pré-visualização da planilha (somente leitura)
-            </DialogDescription>
+        <DialogHeader>
+          <div className="flex flex-row items-center justify-between w-full">
+            <div>
+              <DialogTitle>Visualização: {fileName}</DialogTitle>
+              <DialogDescription>
+                Pré-visualização da planilha (somente leitura)
+              </DialogDescription>
+            </div>
+            <Button variant="outline" onClick={handleDownloadSummaryPDF} disabled={loading || sheets.length === 0}>
+              <FileText className="w-4 h-4 mr-2" />
+              Baixar Resumo PDF
+            </Button>
           </div>
-          <Button variant="outline" onClick={handleDownloadSummaryPDF} disabled={loading || sheets.length === 0}>
-            <FileText className="w-4 h-4 mr-2" />
-            Baixar Resumo PDF
-          </Button>
         </DialogHeader>
         
         <div className="flex-1 min-h-0 overflow-hidden">
@@ -428,8 +492,11 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
                               {row.map((cell, colIndex) => (
                                 <td 
                                   key={colIndex} 
-                                  className="border border-border px-2 py-1 text-sm max-w-[250px]"
-                                  style={getCellStyle(cell.style)}
+                                  className="px-2 py-1 text-sm max-w-[250px] whitespace-nowrap"
+                                  style={{
+                                    border: '1px solid hsl(var(--border))',
+                                    ...getCellStyle(cell.style)
+                                  }}
                                   title={cell.value}
                                 >
                                   {cell.formattedValue || cell.value}
