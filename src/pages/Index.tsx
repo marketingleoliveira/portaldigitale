@@ -4,17 +4,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import Logo from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Package, Users, Shield, Loader2 } from 'lucide-react';
+
 const Index: React.FC = () => {
-  const {
-    user,
-    loading
-  } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
+
   useEffect(() => {
-    if (!loading && user) {
-      navigate('/dashboard');
-    }
-  }, [user, loading, navigate]);
+    // Redireciona para o portal externo
+    window.location.href = 'https://portal.digitaletextil.com.br/';
+  }, []);
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
