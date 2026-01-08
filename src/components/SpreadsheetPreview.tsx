@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Loader2, FileText } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -19,20 +19,24 @@ interface SpreadsheetPreviewProps {
 interface CellStyle {
   bold?: boolean;
   italic?: boolean;
+  underline?: boolean;
   textAlign?: 'left' | 'center' | 'right';
+  verticalAlign?: 'top' | 'middle' | 'bottom';
   backgroundColor?: string;
   textColor?: string;
+  fontSize?: number;
   borderTop?: string;
   borderBottom?: string;
   borderLeft?: string;
   borderRight?: string;
-  fontSize?: number;
 }
 
 interface CellData {
   value: string;
   formattedValue: string;
   style: CellStyle;
+  colspan?: number;
+  rowspan?: number;
 }
 
 interface SheetData {
@@ -57,87 +61,86 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
     }
   }, [open, fileUrl]);
 
-  const parseColor = (color: any): string | undefined => {
-    if (!color) return undefined;
+  const argbToHex = (argb: string | undefined | { argb?: string; theme?: number }): string | undefined => {
+    if (!argb) return undefined;
     
-    // Handle ARGB format (8 chars - first 2 are alpha)
-    if (color.argb) {
-      const argb = color.argb;
-      return `#${argb.substring(2)}`; // Remove alpha
+    if (typeof argb === 'object') {
+      if (argb.argb) {
+        const hex = argb.argb;
+        // ARGB format - remove alpha channel
+        if (hex.length === 8) {
+          return `#${hex.substring(2)}`;
+        }
+        return `#${hex}`;
+      }
+      return undefined;
     }
     
-    // Handle RGB format
-    if (color.rgb) {
-      const rgb = color.rgb.length === 8 ? color.rgb.substring(2) : color.rgb;
-      return `#${rgb}`;
+    if (typeof argb === 'string') {
+      if (argb.length === 8) {
+        return `#${argb.substring(2)}`;
+      }
+      if (argb.length === 6) {
+        return `#${argb}`;
+      }
     }
-    
-    // Handle theme colors with tint
-    if (color.theme !== undefined) {
-      // Default theme colors mapping (approximate)
-      const themeColors = [
-        '#FFFFFF', '#000000', '#E7E6E6', '#44546A',
-        '#4472C4', '#ED7D31', '#A5A5A5', '#FFC000',
-        '#5B9BD5', '#70AD47'
-      ];
-      const baseColor = themeColors[color.theme] || '#000000';
-      return baseColor;
-    }
-    
-    // Handle indexed colors
-    if (color.indexed !== undefined) {
-      const indexedColors = [
-        '#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00',
-        '#FF00FF', '#00FFFF', '#000000', '#FFFFFF', '#FF0000', '#00FF00',
-        '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#800000', '#008000',
-        '#000080', '#808000', '#800080', '#008080', '#C0C0C0', '#808080',
-        '#9999FF', '#993366', '#FFFFCC', '#CCFFFF', '#660066', '#FF8080',
-        '#0066CC', '#CCCCFF', '#000080', '#FF00FF', '#FFFF00', '#00FFFF',
-        '#800080', '#800000', '#008080', '#0000FF', '#00CCFF', '#CCFFFF',
-        '#CCFFCC', '#FFFF99', '#99CCFF', '#FF99CC', '#CC99FF', '#FFCC99',
-        '#3366FF', '#33CCCC', '#99CC00', '#FFCC00', '#FF9900', '#FF6600',
-        '#666699', '#969696', '#003366', '#339966', '#003300', '#333300',
-        '#993300', '#993366', '#333399', '#333333'
-      ];
-      return indexedColors[color.indexed] || '#000000';
-    }
-    
     return undefined;
   };
 
-  const extractCellStyle = (cell: any): CellStyle => {
+  const getBorderStyle = (border: Partial<ExcelJS.Border> | undefined): string | undefined => {
+    if (!border || !border.style) return undefined;
+    
+    const color = border.color ? argbToHex(border.color.argb) || '#000000' : '#000000';
+    
+    const styleMap: Record<string, string> = {
+      thin: `1px solid ${color}`,
+      medium: `2px solid ${color}`,
+      thick: `3px solid ${color}`,
+      double: `3px double ${color}`,
+      dotted: `1px dotted ${color}`,
+      dashed: `1px dashed ${color}`,
+      hair: `1px solid ${color}`,
+      dashDot: `1px dashed ${color}`,
+      dashDotDot: `1px dashed ${color}`,
+      slantDashDot: `1px dashed ${color}`,
+      mediumDashed: `2px dashed ${color}`,
+      mediumDashDot: `2px dashed ${color}`,
+      mediumDashDotDot: `2px dashed ${color}`,
+    };
+    
+    return styleMap[border.style] || `1px solid ${color}`;
+  };
+
+  const extractCellStyle = (cell: ExcelJS.Cell): CellStyle => {
     const style: CellStyle = {};
     
-    if (!cell?.s) return style;
-    
-    const s = cell.s;
-    
     // Font styles
-    if (s.font) {
-      if (s.font.bold) style.bold = true;
-      if (s.font.italic) style.italic = true;
-      if (s.font.color) {
-        const color = parseColor(s.font.color);
+    if (cell.font) {
+      if (cell.font.bold) style.bold = true;
+      if (cell.font.italic) style.italic = true;
+      if (cell.font.underline) style.underline = true;
+      if (cell.font.size) style.fontSize = cell.font.size;
+      if (cell.font.color) {
+        const color = argbToHex(cell.font.color.argb);
         if (color && color !== '#000000') style.textColor = color;
       }
-      if (s.font.sz) style.fontSize = s.font.sz;
     }
     
     // Alignment
-    if (s.alignment?.horizontal) {
-      style.textAlign = s.alignment.horizontal as 'left' | 'center' | 'right';
+    if (cell.alignment) {
+      if (cell.alignment.horizontal) {
+        style.textAlign = cell.alignment.horizontal as 'left' | 'center' | 'right';
+      }
+      if (cell.alignment.vertical) {
+        style.verticalAlign = cell.alignment.vertical as 'top' | 'middle' | 'bottom';
+      }
     }
     
     // Fill/Background
-    if (s.fill) {
-      if (s.fill.fgColor) {
-        const bgColor = parseColor(s.fill.fgColor);
-        if (bgColor && bgColor !== '#FFFFFF' && bgColor !== '#000000') {
-          style.backgroundColor = bgColor;
-        }
-      }
-      if (s.fill.bgColor && !style.backgroundColor) {
-        const bgColor = parseColor(s.fill.bgColor);
+    if (cell.fill && cell.fill.type === 'pattern') {
+      const patternFill = cell.fill as ExcelJS.FillPattern;
+      if (patternFill.fgColor) {
+        const bgColor = argbToHex(patternFill.fgColor.argb);
         if (bgColor && bgColor !== '#FFFFFF') {
           style.backgroundColor = bgColor;
         }
@@ -145,92 +148,98 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
     }
     
     // Borders
-    if (s.border) {
-      const getBorderStyle = (border: any): string | undefined => {
-        if (!border || !border.style) return undefined;
-        const color = parseColor(border.color) || '#000000';
-        const styles: Record<string, string> = {
-          thin: `1px solid ${color}`,
-          medium: `2px solid ${color}`,
-          thick: `3px solid ${color}`,
-          double: `3px double ${color}`,
-          dotted: `1px dotted ${color}`,
-          dashed: `1px dashed ${color}`,
-          hair: `1px solid ${color}`,
-        };
-        return styles[border.style] || `1px solid ${color}`;
-      };
-      
-      style.borderTop = getBorderStyle(s.border.top);
-      style.borderBottom = getBorderStyle(s.border.bottom);
-      style.borderLeft = getBorderStyle(s.border.left);
-      style.borderRight = getBorderStyle(s.border.right);
+    if (cell.border) {
+      style.borderTop = getBorderStyle(cell.border.top);
+      style.borderBottom = getBorderStyle(cell.border.bottom);
+      style.borderLeft = getBorderStyle(cell.border.left);
+      style.borderRight = getBorderStyle(cell.border.right);
     }
     
     return style;
   };
 
-  const formatCellValue = (cell: any): string => {
-    if (!cell) return '';
+  const formatCellValue = (cell: ExcelJS.Cell): string => {
+    const value = cell.value;
     
-    // Use the formatted value if available (preserves currency, date, percentage formatting)
-    if (cell.w !== undefined && cell.w !== null) {
-      return cell.w;
+    if (value === null || value === undefined) return '';
+    
+    // Handle formula results
+    if (typeof value === 'object' && 'result' in value) {
+      const result = (value as ExcelJS.CellFormulaValue).result;
+      if (result !== undefined) {
+        return formatValue(result, cell.numFmt);
+      }
     }
     
-    // Handle numbers with format
-    if (cell.t === 'n' && cell.v !== undefined) {
-      const numValue = cell.v as number;
-      const format = cell.z;
-      
-      // Try to detect format from pattern
-      if (format) {
-        const formatLower = format.toLowerCase();
+    // Handle rich text
+    if (typeof value === 'object' && 'richText' in value) {
+      return (value as ExcelJS.CellRichTextValue).richText.map(rt => rt.text).join('');
+    }
+    
+    // Handle hyperlinks
+    if (typeof value === 'object' && 'hyperlink' in value) {
+      return (value as ExcelJS.CellHyperlinkValue).text || '';
+    }
+    
+    // Handle dates
+    if (value instanceof Date) {
+      return value.toLocaleDateString('pt-BR');
+    }
+    
+    return formatValue(value, cell.numFmt);
+  };
+
+  const formatValue = (value: any, numFmt: string | undefined): string => {
+    if (value === null || value === undefined) return '';
+    
+    if (typeof value === 'number') {
+      if (numFmt) {
+        const fmt = numFmt.toLowerCase();
         
-        // Currency patterns
-        if (formatLower.includes('r$') || formatLower.includes('"r$"')) {
-          return numValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        // Currency formats
+        if (fmt.includes('r$') || fmt.includes('"r$"') || fmt.includes('[$r$')) {
+          return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         }
-        if (formatLower.includes('$') || formatLower.includes('usd')) {
-          return numValue.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+        if (fmt.includes('$') || fmt.includes('usd') || fmt.includes('[$$')) {
+          return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
         }
-        if (formatLower.includes('€') || formatLower.includes('eur')) {
-          return numValue.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+        if (fmt.includes('€') || fmt.includes('eur')) {
+          return value.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
         }
         
         // Percentage
-        if (format.includes('%')) {
-          return (numValue * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+        if (fmt.includes('%')) {
+          return (value * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
         }
         
-        // Accounting format (negative in parentheses)
-        if (format.includes('(') && format.includes(')')) {
-          if (numValue < 0) {
-            return `(${Math.abs(numValue).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
+        // Accounting format
+        if (fmt.includes('(') || fmt.includes('_')) {
+          if (value < 0) {
+            return `(${Math.abs(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
           }
         }
         
-        // Number with decimals
-        if (format.includes('.') || format.includes(',')) {
-          const decimals = (format.match(/0+$/)?.[0] || '').length || 2;
-          return numValue.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+        // Check for decimal places in format
+        const decimalMatch = fmt.match(/\.([0#]+)/);
+        if (decimalMatch) {
+          const decimals = decimalMatch[1].length;
+          return value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+        }
+        
+        // Thousands separator
+        if (fmt.includes(',') || fmt.includes('#')) {
+          return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
       }
       
-      // Default formatting for numbers
-      if (Number.isInteger(numValue)) {
-        return numValue.toLocaleString('pt-BR');
+      // Default number formatting
+      if (Number.isInteger(value)) {
+        return value.toLocaleString('pt-BR');
       }
-      return numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     
-    // Date
-    if (cell.t === 'd') {
-      const date = new Date(cell.v);
-      return date.toLocaleDateString('pt-BR');
-    }
-    
-    return String(cell.v ?? '');
+    return String(value);
   };
 
   const loadSpreadsheet = async () => {
@@ -242,40 +251,38 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
       if (!response.ok) throw new Error('Erro ao carregar arquivo');
       
       const arrayBuffer = await response.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer, { 
-        type: 'array',
-        cellStyles: true,
-        cellNF: true,
-        cellDates: true,
-        cellFormula: true,
-        raw: false
-      });
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(arrayBuffer);
       
-      const sheetsData: SheetData[] = workbook.SheetNames.map(sheetName => {
-        const worksheet = workbook.Sheets[sheetName];
-        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-        
+      const sheetsData: SheetData[] = [];
+      
+      workbook.eachSheet((worksheet) => {
         const cellData: CellData[][] = [];
+        const rowCount = worksheet.rowCount;
+        const colCount = worksheet.columnCount;
         
-        for (let row = range.s.r; row <= range.e.r; row++) {
+        for (let rowNum = 1; rowNum <= rowCount; rowNum++) {
           const rowData: CellData[] = [];
-          for (let col = range.s.c; col <= range.e.c; col++) {
-            const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-            const cell = worksheet[cellAddress];
+          const row = worksheet.getRow(rowNum);
+          
+          for (let colNum = 1; colNum <= colCount; colNum++) {
+            const cell = row.getCell(colNum);
             
-            const value = cell?.v !== undefined ? String(cell.v) : '';
+            const rawValue = cell.value;
+            const value = rawValue !== null && rawValue !== undefined ? String(rawValue) : '';
             const formattedValue = formatCellValue(cell);
             const style = extractCellStyle(cell);
             
             rowData.push({ value, formattedValue, style });
           }
+          
           cellData.push(rowData);
         }
         
-        return {
-          name: sheetName,
+        sheetsData.push({
+          name: worksheet.name,
           data: cellData
-        };
+        });
       });
       
       setSheets(sheetsData);
@@ -293,10 +300,12 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
     
     if (cellStyle.bold) style.fontWeight = 'bold';
     if (cellStyle.italic) style.fontStyle = 'italic';
+    if (cellStyle.underline) style.textDecoration = 'underline';
     if (cellStyle.textAlign) style.textAlign = cellStyle.textAlign;
+    if (cellStyle.verticalAlign) style.verticalAlign = cellStyle.verticalAlign;
     if (cellStyle.backgroundColor) style.backgroundColor = cellStyle.backgroundColor;
     if (cellStyle.textColor) style.color = cellStyle.textColor;
-    if (cellStyle.fontSize) style.fontSize = `${cellStyle.fontSize}px`;
+    if (cellStyle.fontSize) style.fontSize = `${cellStyle.fontSize}pt`;
     if (cellStyle.borderTop) style.borderTop = cellStyle.borderTop;
     if (cellStyle.borderBottom) style.borderBottom = cellStyle.borderBottom;
     if (cellStyle.borderLeft) style.borderLeft = cellStyle.borderLeft;
@@ -468,16 +477,16 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
               
               {sheets.map((sheet, sheetIndex) => (
                 <TabsContent key={sheetIndex} value={sheetIndex.toString()} className="flex-1 min-h-0 mt-2">
-                  <ScrollArea className="h-full border rounded-lg">
+                  <ScrollArea className="h-full border rounded-lg bg-white">
                     <div className="overflow-auto">
                       <table className="border-collapse text-sm" style={{ minWidth: 'max-content' }}>
-                        <thead className="sticky top-0 z-10 bg-muted">
+                        <thead className="sticky top-0 z-10">
                           <tr>
-                            <th className="border border-border px-2 py-1.5 bg-muted/80 min-w-[40px] text-center text-xs font-medium sticky left-0 z-20">
+                            <th className="border border-gray-300 px-2 py-1.5 bg-gray-100 min-w-[40px] text-center text-xs font-medium sticky left-0 z-20 text-gray-700">
                               #
                             </th>
                             {sheet.data[0]?.map((_, colIndex) => (
-                              <th key={colIndex} className="border border-border px-3 py-1.5 bg-muted/80 min-w-[80px] text-xs font-medium text-center">
+                              <th key={colIndex} className="border border-gray-300 px-3 py-1.5 bg-gray-100 min-w-[80px] text-xs font-medium text-center text-gray-700">
                                 {getColumnLetter(colIndex)}
                               </th>
                             ))}
@@ -486,22 +495,28 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
                         <tbody>
                           {sheet.data.map((row, rowIndex) => (
                             <tr key={rowIndex}>
-                              <td className="border border-border px-2 py-1 bg-muted/50 text-center text-xs font-medium sticky left-0">
+                              <td className="border border-gray-300 px-2 py-1 bg-gray-50 text-center text-xs font-medium sticky left-0 text-gray-600">
                                 {rowIndex + 1}
                               </td>
-                              {row.map((cell, colIndex) => (
-                                <td 
-                                  key={colIndex} 
-                                  className="px-2 py-1 text-sm max-w-[250px] whitespace-nowrap"
-                                  style={{
-                                    border: '1px solid hsl(var(--border))',
-                                    ...getCellStyle(cell.style)
-                                  }}
-                                  title={cell.value}
-                                >
-                                  {cell.formattedValue || cell.value}
-                                </td>
-                              ))}
+                              {row.map((cell, colIndex) => {
+                                const cellStyles = getCellStyle(cell.style);
+                                const hasCustomBorder = cell.style.borderTop || cell.style.borderBottom || 
+                                                        cell.style.borderLeft || cell.style.borderRight;
+                                
+                                return (
+                                  <td 
+                                    key={colIndex} 
+                                    className="px-2 py-1 text-sm max-w-[300px] whitespace-nowrap text-gray-900"
+                                    style={{
+                                      border: hasCustomBorder ? undefined : '1px solid #d1d5db',
+                                      ...cellStyles
+                                    }}
+                                    title={cell.value}
+                                  >
+                                    {cell.formattedValue || cell.value}
+                                  </td>
+                                );
+                              })}
                             </tr>
                           ))}
                         </tbody>
