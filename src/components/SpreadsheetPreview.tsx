@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Loader2, FileText, Download } from 'lucide-react';
+import { Loader2, FileText } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -17,9 +16,28 @@ interface SpreadsheetPreviewProps {
   fileName: string;
 }
 
+interface CellStyle {
+  bold?: boolean;
+  italic?: boolean;
+  textAlign?: 'left' | 'center' | 'right';
+  backgroundColor?: string;
+  textColor?: string;
+  borderTop?: string;
+  borderBottom?: string;
+  borderLeft?: string;
+  borderRight?: string;
+  fontSize?: number;
+}
+
+interface CellData {
+  value: string;
+  formattedValue: string;
+  style: CellStyle;
+}
+
 interface SheetData {
   name: string;
-  data: string[][];
+  data: CellData[][];
 }
 
 const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
@@ -39,6 +57,122 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
     }
   }, [open, fileUrl]);
 
+  const rgbaToHex = (color: { rgb?: string; theme?: number; tint?: number } | undefined): string | undefined => {
+    if (!color) return undefined;
+    if (color.rgb) {
+      // ARGB format - remove alpha if present
+      const rgb = color.rgb.length === 8 ? color.rgb.substring(2) : color.rgb;
+      return `#${rgb}`;
+    }
+    return undefined;
+  };
+
+  const extractCellStyle = (cell: XLSX.CellObject | undefined): CellStyle => {
+    const style: CellStyle = {};
+    
+    if (!cell || !cell.s) return style;
+    
+    const cellStyle = cell.s as any;
+    
+    // Font styles
+    if (cellStyle.font) {
+      if (cellStyle.font.bold) style.bold = true;
+      if (cellStyle.font.italic) style.italic = true;
+      if (cellStyle.font.color) {
+        style.textColor = rgbaToHex(cellStyle.font.color);
+      }
+      if (cellStyle.font.sz) {
+        style.fontSize = cellStyle.font.sz;
+      }
+    }
+    
+    // Alignment
+    if (cellStyle.alignment) {
+      if (cellStyle.alignment.horizontal === 'center') style.textAlign = 'center';
+      else if (cellStyle.alignment.horizontal === 'right') style.textAlign = 'right';
+      else style.textAlign = 'left';
+    }
+    
+    // Background color
+    if (cellStyle.fill) {
+      if (cellStyle.fill.fgColor) {
+        style.backgroundColor = rgbaToHex(cellStyle.fill.fgColor);
+      } else if (cellStyle.fill.bgColor) {
+        style.backgroundColor = rgbaToHex(cellStyle.fill.bgColor);
+      }
+    }
+    
+    // Borders
+    if (cellStyle.border) {
+      const borderToStyle = (border: any): string | undefined => {
+        if (!border) return undefined;
+        const color = border.color ? rgbaToHex(border.color) || '#000000' : '#000000';
+        const styleMap: Record<string, string> = {
+          'thin': `1px solid ${color}`,
+          'medium': `2px solid ${color}`,
+          'thick': `3px solid ${color}`,
+          'double': `3px double ${color}`,
+          'dotted': `1px dotted ${color}`,
+          'dashed': `1px dashed ${color}`,
+        };
+        return styleMap[border.style] || `1px solid ${color}`;
+      };
+      
+      style.borderTop = borderToStyle(cellStyle.border.top);
+      style.borderBottom = borderToStyle(cellStyle.border.bottom);
+      style.borderLeft = borderToStyle(cellStyle.border.left);
+      style.borderRight = borderToStyle(cellStyle.border.right);
+    }
+    
+    return style;
+  };
+
+  const formatCellValue = (cell: XLSX.CellObject | undefined): string => {
+    if (!cell) return '';
+    
+    // If there's a formatted text, use it
+    if (cell.w !== undefined) {
+      return cell.w;
+    }
+    
+    // Handle different cell types
+    if (cell.t === 'n' && cell.v !== undefined) {
+      // Number - check for format
+      const numValue = cell.v as number;
+      const format = (cell as any).z;
+      
+      if (format) {
+        // Currency formats
+        if (format.includes('R$') || format.includes('$')) {
+          return numValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+        // Percentage
+        if (format.includes('%')) {
+          return (numValue * 100).toFixed(2) + '%';
+        }
+        // General number with thousands separator
+        if (format.includes(',') || format.includes('#')) {
+          return numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+      }
+      
+      // Default number formatting
+      if (Number.isInteger(numValue)) {
+        return numValue.toLocaleString('pt-BR');
+      }
+      return numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    
+    if (cell.t === 'd' && cell.v !== undefined) {
+      // Date
+      const date = new Date(cell.v as string);
+      return date.toLocaleDateString('pt-BR');
+    }
+    
+    // String or other
+    return String(cell.v ?? '');
+  };
+
   const loadSpreadsheet = async () => {
     setLoading(true);
     setError(null);
@@ -48,25 +182,37 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
       if (!response.ok) throw new Error('Erro ao carregar arquivo');
       
       const arrayBuffer = await response.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const workbook = XLSX.read(arrayBuffer, { 
+        type: 'array',
+        cellStyles: true,
+        cellNF: true,
+        cellDates: true
+      });
       
       const sheetsData: SheetData[] = workbook.SheetNames.map(sheetName => {
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json<string[]>(worksheet, { header: 1, defval: '' });
+        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
         
-        // Normalize data
-        const maxCols = Math.max(...jsonData.map(row => row.length), 1);
-        const normalizedData = jsonData.map(row => {
-          const normalizedRow: string[] = [];
-          for (let j = 0; j < maxCols; j++) {
-            normalizedRow.push(String(row[j] ?? ''));
+        const cellData: CellData[][] = [];
+        
+        for (let row = range.s.r; row <= range.e.r; row++) {
+          const rowData: CellData[] = [];
+          for (let col = range.s.c; col <= range.e.c; col++) {
+            const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+            const cell = worksheet[cellAddress] as XLSX.CellObject | undefined;
+            
+            const value = cell?.v !== undefined ? String(cell.v) : '';
+            const formattedValue = formatCellValue(cell);
+            const style = extractCellStyle(cell);
+            
+            rowData.push({ value, formattedValue, style });
           }
-          return normalizedRow;
-        });
+          cellData.push(rowData);
+        }
         
         return {
           name: sheetName,
-          data: normalizedData
+          data: cellData
         };
       });
       
@@ -78,6 +224,23 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const getCellStyle = (cellStyle: CellStyle): React.CSSProperties => {
+    const style: React.CSSProperties = {};
+    
+    if (cellStyle.bold) style.fontWeight = 'bold';
+    if (cellStyle.italic) style.fontStyle = 'italic';
+    if (cellStyle.textAlign) style.textAlign = cellStyle.textAlign;
+    if (cellStyle.backgroundColor) style.backgroundColor = cellStyle.backgroundColor;
+    if (cellStyle.textColor) style.color = cellStyle.textColor;
+    if (cellStyle.fontSize) style.fontSize = `${cellStyle.fontSize}px`;
+    if (cellStyle.borderTop) style.borderTop = cellStyle.borderTop;
+    if (cellStyle.borderBottom) style.borderBottom = cellStyle.borderBottom;
+    if (cellStyle.borderLeft) style.borderLeft = cellStyle.borderLeft;
+    if (cellStyle.borderRight) style.borderRight = cellStyle.borderRight;
+    
+    return style;
   };
 
   const handleDownloadSummaryPDF = async () => {
@@ -125,13 +288,13 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
       pdf.setFont('helvetica', 'bold');
       pdf.text('Estatísticas do Documento', 15, 60);
       
-      const nonEmptyRows = currentSheet.data.filter(row => row.some(cell => cell.trim() !== '')).length;
+      const nonEmptyRows = currentSheet.data.filter(row => row.some(cell => cell.value.trim() !== '')).length;
       const nonEmptyCols = currentSheet.data[0]?.filter((_, colIdx) => 
-        currentSheet.data.some(row => row[colIdx]?.trim() !== '')
+        currentSheet.data.some(row => row[colIdx]?.value.trim() !== '')
       ).length || 0;
-      const totalCells = currentSheet.data.flat().filter(cell => cell.trim() !== '').length;
+      const totalCells = currentSheet.data.flat().filter(cell => cell.value.trim() !== '').length;
       const numericCells = currentSheet.data.flat().filter(cell => 
-        !isNaN(parseFloat(cell)) && cell.trim() !== ''
+        !isNaN(parseFloat(cell.value)) && cell.value.trim() !== ''
       ).length;
       
       pdf.setFont('helvetica', 'normal');
@@ -148,10 +311,11 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
       
       const tableData = currentSheet.data
         .slice(0, 25)
-        .filter(row => row.some(cell => cell.trim() !== ''))
-        .map(row => row.slice(0, 8).map(cell => 
-          cell.length > 25 ? cell.substring(0, 22) + '...' : cell
-        ));
+        .filter(row => row.some(cell => cell.value.trim() !== ''))
+        .map(row => row.slice(0, 8).map(cell => {
+          const display = cell.formattedValue || cell.value;
+          return display.length > 25 ? display.substring(0, 22) + '...' : display;
+        }));
       
       if (tableData.length > 0) {
         autoTable(pdf, {
@@ -257,17 +421,18 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
                         </thead>
                         <tbody>
                           {sheet.data.map((row, rowIndex) => (
-                            <tr key={rowIndex} className={rowIndex === 0 ? 'bg-muted/30 font-medium' : 'hover:bg-muted/20'}>
+                            <tr key={rowIndex}>
                               <td className="border border-border px-2 py-1 bg-muted/50 text-center text-xs font-medium sticky left-0">
                                 {rowIndex + 1}
                               </td>
                               {row.map((cell, colIndex) => (
                                 <td 
                                   key={colIndex} 
-                                  className="border border-border px-2 py-1 text-sm max-w-[200px] truncate"
-                                  title={cell}
+                                  className="border border-border px-2 py-1 text-sm max-w-[250px]"
+                                  style={getCellStyle(cell.style)}
+                                  title={cell.value}
                                 >
-                                  {cell}
+                                  {cell.formattedValue || cell.value}
                                 </td>
                               ))}
                             </tr>
